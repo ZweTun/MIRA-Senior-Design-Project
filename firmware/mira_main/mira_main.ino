@@ -35,6 +35,8 @@ struct SenseCell {
 
 // 2x2 matrix of sensors
 SenseCell senseMat[2][2];
+int sensorBuffer[2][2];
+
 
 // Return the cell with the highest sensor reading
 SenseCell* localize() {
@@ -44,6 +46,7 @@ SenseCell* localize() {
   for (int i = 0; i < 2; i++) {
     for (int j = 0; j < 2; j++) {
       senseMat[i][j].updateVal();
+      sensorBuffer[i][j] = senseMat[i][j].getSensorVal();
       if (senseMat[i][j].getSensorVal() > maxVal) {
         maxVal = senseMat[i][j].getSensorVal();
         maxCell = &senseMat[i][j];
@@ -55,15 +58,15 @@ SenseCell* localize() {
 
 // For now just print the matrix
 void display() {
-  Serial.println("Sensor Matrix:");
+ // Send CSV rows
   for (int i = 0; i < 2; i++) {
-    for (int j = 0; j < 2; j++) {
-      Serial.print(senseMat[i][j].getSensorVal());
-      Serial.print("\t");
-    }
-    Serial.println();
+    Serial.print(sensorBuffer[i][0]);
+    Serial.print(",");
+    Serial.println(sensorBuffer[i][1]);
   }
-  Serial.println();
+
+  Serial.println("---"); // row separator for Python parser
+  delay(200); // 5 updates/sec
 }
 
 void setup() {
@@ -85,14 +88,14 @@ void setup() {
 void loop() {
   SenseCell* strongest = localize();
 
-  if (strongest != nullptr) {
-    Serial.print("Strongest field at: (");
-    Serial.print(strongest->posX);
-    Serial.print(", ");
-    Serial.print(strongest->posY);
-    Serial.print(") with value ");
-    Serial.println(strongest->getSensorVal());
-  }
+  // if (strongest != nullptr) {
+  //   Serial.print("Strongest field at: (");
+  //   Serial.print(strongest->posX);
+  //   Serial.print(", ");
+  //   Serial.print(strongest->posY);
+  //   Serial.print(") with value ");
+  //   Serial.println(strongest->getSensorVal());
+  // }
 
   display();
   delay(1000);
