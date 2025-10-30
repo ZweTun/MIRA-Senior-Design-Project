@@ -1,3 +1,4 @@
+# === Existing defaults (C/C++) ===
 # Prerequisites
 *.d
 
@@ -37,5 +38,45 @@
 *.out
 *.app
 
-# debug information files
+# Debug information files
 *.dwo
+
+# === Arduino / ESP32 Additions ===
+# Arduino build and cache files
+*.bin
+*.elf
+*.hex
+*.map
+*.log
+*.pyc
+__pycache__/
+
+# ESP-IDF build folder
+build/
+sdkconfig.old
+
+# PlatformIO (optional)
+.pio/
+
+# === IDE and OS files ===
+.vscode/
+.DS_Store
+Thumbs.db
+
+# === Hardware Design (KiCad, etc.) ===
+*.bak
+*.kicad_prl
+*.kicad_sch-bak
+*.zip
+*.tmp
+*.swp
+
+# === 3D models and large CAD outputs (tracked with Git LFS instead) ===
+*.stl
+*.step
+*.3mf
+
+# === Temporary test data or logs ===
+*.csv
+*.txt
+*.dat
