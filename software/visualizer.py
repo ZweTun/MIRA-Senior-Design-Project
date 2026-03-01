@@ -2,12 +2,16 @@ import serial
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Change COM port to your Arduino
+
+#init 
+ROWS = 2
+COLS = 2
+# Change COM port to Arduino
 ser = serial.Serial('COM4', 115200, timeout=1)
 
 plt.ion()  # interactive mode
 fig, ax = plt.subplots()
-data = np.zeros((2, 2))  # 2x2 matrix
+data = np.zeros((ROWS, COLS))  # Initialize data array
 heatmap = ax.imshow(data, cmap='hot', vmin=0, vmax=1023)
 plt.colorbar(heatmap)
 
