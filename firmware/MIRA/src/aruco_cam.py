@@ -45,3 +45,63 @@ cv2.destroyAllWindows()
 
 
 
+
+
+
+
+
+
+
+
+
+# import cv2
+# import numpy as np
+
+# SHOW = True  # set False if running headless over SSH
+
+# cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+# cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+# cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+# aruco = cv2.aruco
+# dictionary = aruco.getPredefinedDictionary(aruco.DICT_APRILTAG_36h11)
+# params = aruco.DetectorParameters()
+# params.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
+
+# detector = aruco.ArucoDetector(dictionary, params)
+
+# print("Press q to quit")
+
+# while True:
+#     ok, frame = cap.read()
+#     if not ok:
+#         print("Camera read failed")
+#         break
+
+#     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+#     corners, ids, _ = detector.detectMarkers(gray)
+
+#     if ids is not None:
+#         aruco.drawDetectedMarkers(frame, corners, ids)
+
+#         for i in range(len(ids)):
+#             pts = corners[i][0]
+#             cx = int(np.mean(pts[:, 0]))
+#             cy = int(np.mean(pts[:, 1]))
+#             tag_id = int(ids[i][0])
+
+#             cv2.circle(frame, (cx, cy), 6, (0, 255, 0), -1)
+#             cv2.putText(frame, f"ID {tag_id}", (cx + 10, cy),
+#                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+#             print(f"Tag {tag_id} at pixel ({cx}, {cy})")
+
+#     if SHOW:
+#         cv2.imshow("AprilTag (Pi)", frame)
+#         if cv2.waitKey(1) & 0xFF == ord("q"):
+#             break
+#     else:
+#         cv2.waitKey(1)
+
+# cap.release()
+# cv2.destroyAllWindows()
