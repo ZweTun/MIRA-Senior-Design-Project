@@ -1,4 +1,5 @@
 from enum import auto
+import importlib
 
 import cv2
 import numpy as np
@@ -7,6 +8,12 @@ from typing import Optional
 from planner.models import CellPos
 
 from planner.mosaic import COLOR_TO_ID, ID_TO_COLOR, TAG_TO_COLOR_ID
+
+_picamera2_spec = importlib.util.find_spec("picamera2")
+if _picamera2_spec is not None:
+    Picamera2 = importlib.import_module("picamera2").Picamera2
+else:
+    Picamera2 = None
 
 
 
@@ -78,8 +85,38 @@ class TileEvent:
 
 
 class CameraPipeline:
-    def __init__(self, grid, camera_index: int = 1, stable_n: int = 3, stale_frames: int = 15):
-        self.cap = cv2.VideoCapture(camera_index)
+    def __init__(
+        self,
+        grid,
+        camera_index: int = 1,
+        stable_n: int = 3,
+        stale_frames: int = 15,
+        use_picamera2: bool = False,
+        picamera_size: tuple[int, int] = (1280, 720),
+    ):
+        self.cap = None
+        self.picam2 = None
+        self.use_picamera2 = False
+
+        if use_picamera2:
+            if Picamera2 is None:
+                print("Picamera2 requested but not installed; falling back to OpenCV VideoCapture.")
+            else:
+                try:
+                    self.picam2 = Picamera2()
+                    config = self.picam2.create_preview_configuration(
+                        main={"format": "BGR888", "size": picamera_size}
+                    )
+                    self.picam2.configure(config)
+                    self.picam2.start()
+                    self.use_picamera2 = True
+                    print(f"Using Picamera2 capture at {picamera_size}.")
+                except Exception as e:
+                    print(f"Picamera2 initialization failed ({e}); falling back to OpenCV VideoCapture.")
+                    self.picam2 = None
+
+        if not self.use_picamera2:
+            self.cap = cv2.VideoCapture(camera_index)
         self.grid = grid
 
         self.aruco = cv2.aruco
@@ -568,9 +605,31 @@ class CameraPipeline:
         return cv2.addWeighted(overlay, alpha, base_img, 1 - alpha, 0)
 
     def close(self):
+        if self.picam2 is not None:
+            try:
+                self.picam2.stop()
+                self.picam2.close()
+            except Exception:
+                pass
         if self.cap is not None:
             self.cap.release()
         cv2.destroyAllWindows()
+
+    def read_frame(self):
+        if self.use_picamera2 and self.picam2 is not None:
+            try:
+                frame = self.picam2.capture_array()
+            except Exception:
+                return False, None
+            if frame is None:
+                return False, None
+            if len(frame.shape) == 3 and frame.shape[2] == 4:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+            return True, frame
+
+        if self.cap is None:
+            return False, None
+        return self.cap.read()
 
     def inner_corner_by_center(self, tag_pts, img_center):
         d2 = np.sum((tag_pts - img_center) ** 2, axis=1)
@@ -757,7 +816,7 @@ class CameraPipeline:
 
     # Takes list of cells to check 
     def step(self, cells_to_check=None):
-        ok, frame = self.cap.read()
+        ok, frame = self.read_frame()
         if not ok:
             return None, [], True, []
         

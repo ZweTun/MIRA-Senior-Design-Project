@@ -30,6 +30,9 @@ from planner.mosaic import COLOR_TO_ID, ID_TO_COLOR, TAG_TO_COLOR_ID
 SERIAL_ENABLE = True
 SERIAL_PORT = "COM11"
 SERIAL_BAUD = 115200
+USE_PICAMERA2 = False
+CAMERA_INDEX = 1
+PICAMERA_SIZE = (1280, 720)
 
 ser = None
 my_name = ""
@@ -253,7 +256,12 @@ def main():
         time.sleep(1)
     destroy_mosaic(current_mosaic)  # Clear any existing mosaic data
     current_mosaic = build_mosaic_from_grid(grid)
-    camera = CameraPipeline(grid=grid, camera_index=1)
+    camera = CameraPipeline(
+        grid=grid,
+        camera_index=CAMERA_INDEX,
+        use_picamera2=USE_PICAMERA2,
+        picamera_size=PICAMERA_SIZE,
+    )
     all_cells = []
     for row in range(GRID_ROWS):
         for col in range(GRID_COLS):
