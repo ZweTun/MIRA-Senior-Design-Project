@@ -5,13 +5,13 @@
 #include <set>
 
 struct CellPos {
-  int posX;
-  int posY;
-  CellPos(int x = 0, int y = 0) : posX(x), posY(y) {}
+  int row;
+  int col;
+  CellPos(int r = 0, int c = 0) : row(r), col(c) {}
 
     bool operator<(const CellPos& other) const {
-    if (posX != other.posX) return posX < other.posX;
-    return posY < other.posY;
+    if (row != other.row) return row < other.row;
+    return col < other.col;
   }
 };
 
@@ -47,9 +47,9 @@ public:
             Serial.print(": ");
             for (const CellPos& pos : positions) {
                 Serial.print("(");
-                Serial.print(pos.posX);
+                Serial.print(pos.row);
                 Serial.print(", ");
-                Serial.print(pos.posY);
+                Serial.print(pos.col);
                 Serial.print(") ");
             }
             Serial.println();

@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>MIRA Display</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--page-bg: #0a0c10;
+			--panel-bg: #12151c;
+			--text-main: #eef1f8;
+			--text-sub: #8a93a8;
+			--grid-bg: #0e1018;
+
+			/* State colors — all meet 3:1 contrast on dark bg */
+			--correct-fill:   #0d3320;
+			--correct-border: #22c55e;   /* 4.6:1 on --page-bg */
+			--correct-icon:   #22c55e;
+
+			--incorrect-fill:   #2d0e0e;
+			--incorrect-border: #ef4444; /* 4.5:1 */
+			--incorrect-icon:   #ef4444;
+
+			--unknown-fill:   #1a1c24;
+			--unknown-border: #6b7280;
+			--unknown-icon:   #9ca3af;
+
+			--target-border:  #9b5cff;
+			--target-glow:    rgba(155,92,255,0.28);
+			--target-fill:    rgba(155,92,255,0.16);
+			--target-ring:    #d6c2ff;
+
+			--empty-border:   rgba(255,255,255,0.08);
+
+			--focus-ring: rgba(250,204,21,0.7);
+		}
+
+		*, *::before, *::after { box-sizing: border-box; }
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			background: var(--page-bg);
+			color: var(--text-main);
+			font-family: 'DM Mono', monospace;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			padding: 28px 16px 40px;
+			gap: 18px;
+		}
+
+		/* ── Header ── */
+		.topbar {
+			width: min(900px, 100%);
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.back-button {
+			appearance: none;
+			border: 1px solid rgba(255,255,255,0.12);
+			background: transparent;
+			color: var(--text-main);
+			width: 44px;
+			height: 44px;
+			cursor: pointer;
+			border-radius: 8px;
+			display: grid;
+			place-items: center;
+			transition: background 130ms, border-color 130ms;
+			flex-shrink: 0;
+		}
+		.back-button svg { width: 22px; height: 22px; stroke: currentColor; stroke-width: 2.2; fill: none; }
+		.back-button:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.25); }
+		.back-button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+
+		/* ── Title ── */
+		.headline {
+			font-family: 'Syne', sans-serif;
+			font-weight: 800;
+			font-size: clamp(48px, 8vw, 72px);
+			letter-spacing: -0.02em;
+			margin: 0;
+			text-align: center;
+			line-height: 1;
+			/* High-contrast white — no color that might confuse with state colors */
+			color: #fff;
+		}
+
+		.status-bar {
+			width: min(900px, 100%);
+			background: var(--panel-bg);
+			border: 1px solid rgba(255,255,255,0.07);
+			border-radius: 8px;
+			padding: 10px 16px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			min-height: 46px;
+		}
+		.status-dot {
+			width: 8px; height: 8px;
+			border-radius: 50%;
+			background: var(--text-sub);
+			flex-shrink: 0;
+			transition: background 300ms;
+		}
+		.status-dot.connected { background: var(--correct-border); }
+		.status-dot.error     { background: var(--incorrect-border); }
+		#statusText {
+			margin: 0;
+			font-size: 13px;
+			color: var(--text-sub);
+			letter-spacing: 0.02em;
+		}
+
+		/* ── Grid panel ── */
+		.display-panel {
+			width: min(900px, 100%);
+			background: var(--panel-bg);
+			border: 1px solid rgba(255,255,255,0.07);
+			border-radius: 12px;
+			padding: 20px;
+			display: flex;
+			justify-content: center;
+			overflow: auto;
+		}
+
+		#gridContainer {
+			display: inline-grid;
+			gap: 3px;
+		}
+
+		.grid-row {
+			display: contents;
+		}
+
+		/* ── Cell base ── */
+		.grid-cell {
+			width: clamp(38px, 5.5vw, 58px);
+			height: clamp(38px, 5.5vw, 58px);
+			border: 2px solid var(--empty-border);
+			border-radius: 4px;
+			position: relative;
+			opacity: 0.5;
+			transition: opacity 120ms, border-color 120ms, box-shadow 120ms, background 120ms;
+			/* Icon SVGs injected as background — centered */
+			background-size: 55% 55%;
+			background-repeat: no-repeat;
+			background-position: center;
+		}
+
+		/* ── States ── */
+
+		/* CORRECT — green border + checkmark */
+		.state-correct {
+			border-color: var(--correct-border);
+			background-color: var(--correct-fill);
+			opacity: 1;
+			/* SVG checkmark — inline encoded */
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+		}
+
+		/* INCORRECT — red border + X */
+		.state-incorrect {
+			border-color: var(--incorrect-border);
+			background-color: var(--incorrect-fill);
+			opacity: 1;
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ef4444' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
+		}
+
+		/* UNKNOWN — dashed grey border + ? */
+		.state-unknown {
+			border: 2px dashed var(--unknown-border);
+			background-color: var(--unknown-fill);
+			opacity: 0.75;
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/%3E%3Ccircle cx='12' cy='17' r='0.5' fill='%239ca3af'/%3E%3C/svg%3E");
+		}
+
+		/* EMPTY */
+		.state-empty {
+			opacity: 0.25;
+			border-color: var(--empty-border);
+		}
+
+		/* TARGET — bright yellow pulsing border */
+		.state-target {
+			border-color: var(--target-border) !important;
+			background-color: var(--target-fill);
+			box-shadow: 0 0 0 3px var(--target-glow), inset 0 0 0 1px rgba(155,92,255,0.3);
+			opacity: 1;
+			animation: target-pulse 1.6s ease-in-out infinite;
+		}
+
+		.state-target::after {
+			content: "";
+			position: absolute;
+			left: 50%;
+			top: 50%;
+			width: 44%;
+			height: 44%;
+			transform: translate(-50%, -50%);
+			border: 2px solid var(--target-ring);
+			border-radius: 50%;
+			background: rgba(214,194,255,0.14);
+			box-shadow: 0 0 8px rgba(214,194,255,0.3);
+			pointer-events: none;
+		}
+
+		@keyframes target-pulse {
+			0%, 100% { box-shadow: 0 0 0 3px var(--target-glow), inset 0 0 0 1px rgba(155,92,255,0.3); }
+			50%       { box-shadow: 0 0 0 7px rgba(155,92,255,0.14), inset 0 0 0 1px rgba(155,92,255,0.45); }
+		}
+
+		/* ── Legend ── */
+		.legend {
+			width: min(900px, 100%);
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px 20px;
+			justify-content: center;
+		}
+
+		.legend-item {
+			display: flex;
+			align-items: center;
+			gap: 7px;
+			font-size: 13px;
+			color: var(--text-sub);
+			letter-spacing: 0.01em;
+		}
+
+		.legend-swatch {
+			width: 22px;
+			height: 22px;
+			border-radius: 4px;
+			flex-shrink: 0;
+			border: 2px solid transparent;
+			background-size: 80% 80%;
+			background-repeat: no-repeat;
+			background-position: center;
+		}
+
+		.legend-correct {
+			border-color: var(--correct-border);
+			background-color: var(--correct-fill);
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+		}
+		.legend-incorrect {
+			border-color: var(--incorrect-border);
+			background-color: var(--incorrect-fill);
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ef4444' stroke-width='3.5' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
+		}
+		.legend-unknown {
+			border: 2px dashed var(--unknown-border);
+			background-color: var(--unknown-fill);
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/%3E%3Ccircle cx='12' cy='17' r='0.5' fill='%239ca3af'/%3E%3C/svg%3E");
+		}
+		.legend-target {
+			border-color: var(--target-border);
+			background-color: var(--target-fill);
+			box-shadow: 0 0 0 2px var(--target-glow);
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='12' cy='12' r='6' stroke='%23d6c2ff' stroke-width='2.2'/%3E%3C/svg%3E");
+		}
+		.legend-empty {
+			border-color: rgba(255,255,255,0.15);
+			opacity: 0.4;
+		}
+
+		/* ── Complete banner ── */
+		.complete-banner {
+			display: none;
+			width: min(900px, 100%);
+			background: var(--correct-fill);
+			border: 2px solid var(--correct-border);
+			border-radius: 10px;
+			padding: 16px 24px;
+			text-align: center;
+			font-family: 'Syne', sans-serif;
+			font-size: clamp(18px, 3vw, 24px);
+			font-weight: 700;
+			color: var(--correct-border);
+			letter-spacing: 0.04em;
+		}
+		.complete-banner.visible { display: block; animation: banner-in 400ms ease; }
+		@keyframes banner-in {
+			from { opacity: 0; transform: translateY(6px); }
+			to   { opacity: 1; transform: translateY(0); }
+		}
+	</style>
+</head>
+<body>
+
+	<div class="topbar">
+		<button class="back-button" id="backButton" type="button" aria-label="Go back">
+			<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+				<path d="M15.5 5.5L9 12l6.5 6.5" />
+			</svg>
+		</button>
+	</div>
+
+	<h1 class="headline">MIRA</h1>
+
+	<div class="status-bar" role="status" aria-live="polite">
+		<div class="status-dot" id="statusDot" aria-hidden="true"></div>
+		<p id="statusText">Waiting for mosaic selection...</p>
+	</div>
+
+	<section class="display-panel" aria-label="Mosaic grid">
+		<div id="gridContainer" role="grid" aria-label="8 by 8 mosaic grid"></div>
+	</section>
+
+	<div class="complete-banner" id="completeBanner" role="alert" aria-live="assertive">
+		✓ Mosaic complete!
+	</div>
+
+	<!-- Legend — icons + text, no color-only labels -->
+	<nav class="legend" aria-label="Cell state legend">
+		<div class="legend-item">
+			<div class="legend-swatch legend-correct" aria-hidden="true"></div>
+			<span>Correct placement</span>
+		</div>
+		<div class="legend-item">
+			<div class="legend-swatch legend-incorrect" aria-hidden="true"></div>
+			<span>Wrong placement</span>
+		</div>
+		<!-- <div class="legend-item">
+			<div class="legend-swatch legend-unknown" aria-hidden="true"></div>
+			<span>Undetected</span>
+		</div> -->
+		<div class="legend-item">
+			<div class="legend-swatch legend-target" aria-hidden="true"></div>
+			<span>Target cell</span>
+		</div>
+		<div class="legend-item">
+			<div class="legend-swatch legend-empty" aria-hidden="true"></div>
+			<span>Empty</span>
+		</div>
+	</nav>
+
+	<script>
+		const backButton   = document.getElementById("backButton");
+		const statusText   = document.getElementById("statusText");
+		const statusDot    = document.getElementById("statusDot");
+		const gridContainer= document.getElementById("gridContainer");
+		const completeBanner = document.getElementById("completeBanner");
+
+		let currentGrid = null;
+		let currentGridSignature = "";
+		let lastConfirmationCounter = 0;
+		let lastHoverKey = null;
+		const HOVER_BEEP_INTERVAL_MS = 220;
+		let nextHoverBeepAtMs = 0;
+		let previousMosaicComplete = false;
+		let audioContext = null;
+		let audioPrimed = false;
+		let pendingBellCount = 0;
+		let pendingHoverChimeCount = 0;
+		let pendingFanfare = false;
+
+		function ensureAudioContext() {
+			if (!audioContext) {
+				audioContext = new (window.AudioContext || window.webkitAudioContext)();
+			}
+			return audioContext;
+		}
+
+		function flushPendingAudio() {
+			if (!audioContext || audioContext.state !== "running") return;
+			while (pendingBellCount > 0) {
+				playBell();
+				pendingBellCount -= 1;
+			}
+			while (pendingHoverChimeCount > 0) {
+				playHoverChime();
+				pendingHoverChimeCount -= 1;
+			}
+			if (pendingFanfare) {
+				playFanfare();
+				pendingFanfare = false;
+			}
+		}
+
+		function unlockAudioAndFlush() {
+			const ctx = ensureAudioContext();
+			if (ctx.state === "running") {
+				flushPendingAudio();
+				return;
+			}
+			ctx.resume().then(() => {
+				flushPendingAudio();
+			}).catch(() => {
+		
+			});
+		}
+
+		function prewarmAudio() {
+			const ctx = ensureAudioContext();
+			const warm = () => {
+				const osc = ctx.createOscillator();
+				const gain = ctx.createGain();
+				gain.gain.setValueAtTime(0, ctx.currentTime);
+				osc.connect(gain);
+				gain.connect(ctx.destination);
+				osc.start(ctx.currentTime);
+				osc.stop(ctx.currentTime + 0.001);
+			};
+
+			if (ctx.state === "running") {
+				warm();
+				return;
+			}
+
+			ctx.resume().then(() => {
+				warm();
+			}).catch(() => {
+		
+			});
+		}
+
+		function primeAudioOnce() {
+			if (audioPrimed) return;
+			audioPrimed = true;
+			unlockAudioAndFlush();
+			prewarmAudio();
+		}
+
+		function playTone(freq, when, duration, gain, type = "sine") {
+			const ctx = ensureAudioContext();
+			const osc = ctx.createOscillator();
+			const env = ctx.createGain();
+
+			osc.type = type;
+			osc.frequency.setValueAtTime(freq, when);
+
+			env.gain.setValueAtTime(0.0001, when);
+			env.gain.exponentialRampToValueAtTime(gain, when + 0.012);
+			env.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+
+			osc.connect(env);
+			env.connect(ctx.destination);
+
+			osc.start(when);
+			osc.stop(when + duration + 0.02);
+		}
+
+		function playBell() {
+			const ctx = ensureAudioContext();
+			if (ctx.state !== "running") {
+				pendingBellCount += 1;
+				return;
+			}
+			const t = ctx.currentTime;
+			playTone(880, t, 0.18, 0.07, "triangle");
+			playTone(1320, t + 0.06, 0.22, 0.06, "sine");
+		}
+
+		function playHoverChime() {
+			const ctx = ensureAudioContext();
+			if (ctx.state !== "running") {
+				pendingHoverChimeCount += 1;
+				return;
+			}
+			const t = ctx.currentTime;
+			playTone(988, t, 0.14, 0.06, "triangle");
+		}
+
+		function playFanfare() {
+			const ctx = ensureAudioContext();
+			if (ctx.state !== "running") {
+				pendingFanfare = true;
+				return;
+			}
+			const t = ctx.currentTime;
+			playTone(523.25, t, 0.22, 0.08, "triangle");
+			playTone(659.25, t + 0.12, 0.24, 0.08, "triangle");
+			playTone(783.99, t + 0.24, 0.28, 0.08, "triangle");
+			playTone(1046.5, t + 0.39, 0.42, 0.1, "sine");
+		}
+
+		function processBackendSignals(confirmationCounter, mosaicComplete) {
+			const nextCounter = Number.isFinite(confirmationCounter) ? confirmationCounter : 0;
+			if (nextCounter > lastConfirmationCounter) {
+				const delta = nextCounter - lastConfirmationCounter;
+				for (let i = 0; i < delta; i++) {
+					// Temp disable bell sound until we have a better way to prevent multiple overlapping sounds when several confirmations come in at once
+					playBell();
+				}
+			}
+			lastConfirmationCounter = nextCounter;
+
+			if (mosaicComplete === true && previousMosaicComplete !== true) {
+				playFanfare();
+			}
+			previousMosaicComplete = mosaicComplete === true;
+		}
+
+		function checkHoverChime(data) {
+			const pos = data.raw_position;
+			if (!pos || !Array.isArray(data.targets) || !data.current_color) {
+				lastHoverKey = null;
+				nextHoverBeepAtMs = 0;
+				return;
+			}
+
+			const { x, y } = pos;
+			if (x < 0 || y < 0) {
+				lastHoverKey = null;
+				nextHoverBeepAtMs = 0;
+				return;
+			}
+
+			const isOnTarget = data.targets.some(t => t.x === x && t.y === y);
+			if (isOnTarget) {
+				const key = `${x},${y},${data.current_color}`;
+				const now = performance.now();
+				if (key !== lastHoverKey) {
+					playHoverChime();
+					lastHoverKey = key;
+					nextHoverBeepAtMs = now + HOVER_BEEP_INTERVAL_MS;
+				} else if (now >= nextHoverBeepAtMs) {
+					playHoverChime();
+					nextHoverBeepAtMs = now + HOVER_BEEP_INTERVAL_MS;
+				}
+			} else {
+				lastHoverKey = null;
+				nextHoverBeepAtMs = 0;
+			}
+		}
+
+		function normalizeColor(name) {
+			const map = {
+				cyan:    "#26a6b5",
+				magenta: "#a020a5",
+				green:   "#1a7a40",
+				red:     "#b02020",
+				blue:    "#2a50d0",
+				yellow:  "#c8a818",
+				orange:  "#c06010",
+				white:   "#d8dce8",
+				black:   "#181a20",
+			};
+			if (!name || typeof name !== "string") return "#2a2d38";
+			return map[name.toLowerCase()] || name;
+		}
+
+		function setStatus(msg, state = "normal") {
+			statusText.textContent = msg;
+			statusDot.className = "status-dot" + (state === "connected" ? " connected" : state === "error" ? " error" : "");
+		}
+
+		function showMosaicGrid(grid) {
+			gridContainer.innerHTML = "";
+			const cols = grid[0]?.length ?? 8;
+			gridContainer.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+			gridContainer.style.gridTemplateRows    = `repeat(${grid.length}, auto)`;
+
+			for (let r = 0; r < grid.length; r++) {
+				for (let c = 0; c < grid[r].length; c++) {
+					const cell = document.createElement("div");
+					cell.className = "grid-cell";
+					cell.dataset.row = r;
+					cell.dataset.col = c;
+					cell.style.backgroundColor = normalizeColor(grid[r][c]);
+					// Accessible label
+					cell.setAttribute("role", "gridcell");
+					cell.setAttribute("aria-label", `Row ${r+1}, column ${c+1}: ${grid[r][c] ?? "empty"}`);
+					gridContainer.appendChild(cell);
+				}
+			}
+		}
+
+		function getCellElement(row, col) {
+			return gridContainer.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+		}
+
+		function resetCellStyles() {
+			gridContainer.querySelectorAll(".grid-cell").forEach(cell => {
+				cell.className = "grid-cell";
+				// restore base color
+				const r = parseInt(cell.dataset.row);
+				const c = parseInt(cell.dataset.col);
+				if (currentGrid?.[r]?.[c]) {
+					cell.style.backgroundColor = normalizeColor(currentGrid[r][c]);
+				}
+			});
+		}
+
+		function applyCellState(list) {
+			if (!Array.isArray(list)) return;
+			list.forEach(({ x, y, state }) => {
+				const cell = getCellElement(x, y);
+				if (!cell) return;
+				const stateClass = {
+					correct:   "state-correct",
+					incorrect: "state-incorrect",
+					empty:     "state-empty",
+					unknown:   "state-empty",
+				}[state];
+				if (stateClass) cell.classList.add(stateClass);
+
+				// Update accessible label
+				const label = cell.getAttribute("aria-label").split(":")[0];
+				cell.setAttribute("aria-label", `${label}: ${state}`);
+			});
+		}
+
+		function applyTargets(targets) {
+			if (!Array.isArray(targets)) return;
+			targets.forEach(({ x, y }) => {
+				const cell = getCellElement(x, y);
+				if (cell) cell.classList.add("state-target");
+			});
+		}
+
+		function renderFromPayload(data) {
+			if (Array.isArray(data.grid) && data.grid.length > 0) {
+				const sig = JSON.stringify(data.grid);
+				if (sig !== currentGridSignature) {
+					currentGrid = data.grid;
+					currentGridSignature = sig;
+					showMosaicGrid(currentGrid);
+					lastConfirmationCounter = Number.isFinite(data.confirmation_counter) ? data.confirmation_counter : 0;
+					lastHoverKey = null;
+					previousMosaicComplete = false;
+					completeBanner.classList.remove("visible");
+				}
+			}
+
+			if (!currentGrid) {
+				setStatus("Waiting for mosaic selection...");
+				return;
+			}
+
+			resetCellStyles();
+			applyCellState(data.cell_state);
+			applyTargets(data.targets);
+			processBackendSignals(data.confirmation_counter, data.mosaic_complete);
+
+			const done = data.mosaic_complete === true;
+			if (done) {
+				setStatus("Mosaic complete.", "connected");
+				completeBanner.classList.add("visible");
+				return;
+			}
+
+			completeBanner.classList.remove("visible");
+
+			if (data.current_position && data.current_color) {
+				setStatus(
+					`Holding: ${data.current_color}  ·  position (${data.current_position.x}, ${data.current_position.y})`,
+					"connected"
+				);
+			} else {
+				setStatus("Mosaic loaded. Waiting for tile detection...", "connected");
+			}
+		}
+
+		function connectWebSocket() {
+			const ws = new WebSocket("ws://localhost:8000/ws");
+			ws.onopen    = () => setStatus("Connected. Waiting for data...", "connected");
+			ws.onmessage = (e) => {
+				try {
+					const data = JSON.parse(e.data);
+					renderFromPayload(data);
+					checkHoverChime(data);
+				}
+				catch { setStatus("Received invalid data.", "error"); }
+			};
+			ws.onerror  = () => setStatus("WebSocket error.", "error");
+			ws.onclose  = () => {
+				setStatus("Disconnected — retrying...", "error");
+				setTimeout(connectWebSocket, 1000);
+			};
+		}
+
+		backButton.addEventListener("click", () => {
+			window.history.length > 1 ? window.history.back() : (window.location.href = "library.html");
+		});
+
+		connectWebSocket();
+
+		document.addEventListener("pointerdown", primeAudioOnce, { once: true });
+		document.addEventListener("keydown", primeAudioOnce, { once: true });
+	</script>
+</body>
+</html>

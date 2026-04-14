@@ -1,0 +1,9 @@
+grid:
+  - [blue, blue, blue, blue, blue, blue, blue, blue]
+  - [blue, blue, yellow, yellow, yellow, yellow, blue, blue]
+  - [blue, yellow, yellow, yellow, blue, blue, blue, blue]
+  - [blue, red, yellow, blue, blue, cyan, blue, blue]
+  - [blue, yellow, yellow, blue, blue, blue, blue, blue]
+  - [blue, yellow, yellow, yellow, blue, blue, blue, blue]
+  - [blue, blue, yellow, yellow, yellow, yellow, blue, blue]
+  - [blue, blue, blue, blue, blue, blue, blue, blue]     

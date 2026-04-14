@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>MIRA - Mosaic Library</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--page-bg: #0f1115;
+			--card-bg: #1b1f27;
+			--card-border: rgba(255, 255, 255, 0.14);
+			--text-main: #ffffff;
+			--text-sub: #ffffff;
+			--focus-ring: rgba(148, 163, 184, 0.72);
+			--shadow-soft: 0 12px 24px rgba(0, 0, 0, 0.5);
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+        
+        /* ── Title ── */
+		.headline {
+			font-family: 'Syne', sans-serif;
+			font-weight: 800;
+			font-size: clamp(48px, 8vw, 72px);
+			letter-spacing: -0.02em;
+			margin: 0;
+			text-align: center;
+			line-height: 1;
+			/* High-contrast white — no color that might confuse with state colors */
+			color: #fff;
+		}
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			background: var(--page-bg);
+			color: var(--text-main);
+			font-family: 'DM Mono', monospace;
+			padding: 24px 24px 40px;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+		}
+
+		.page-shell {
+			width: min(1200px, 100%);
+		}
+
+		.topbar {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.back-button {
+			appearance: none;
+			border: none;
+			background: transparent;
+			color: var(--text-main);
+			width: 52px;
+			height: 52px;
+			cursor: pointer;
+			border-radius: 8px;
+			display: grid;
+			place-items: center;
+			transition: background-color 140ms ease, transform 140ms ease;
+		}
+
+		.back-button svg {
+			width: 34px;
+			height: 34px;
+			stroke: currentColor;
+			stroke-width: 2.1;
+			fill: none;
+		}
+
+		.back-button:hover,
+		.back-button:focus-visible {
+			background: rgba(255, 255, 255, 0.1);
+			transform: translateX(-2px);
+			outline: none;
+		}
+
+		.back-button:focus-visible {
+			box-shadow: 0 0 0 3px var(--focus-ring);
+		}
+
+		.title-block {
+			text-align: center;
+			margin-top: 2px;
+		}
+
+		.title-block h1 {
+			margin: 0;
+			font-size: clamp(56px, 8vw, 68px);
+			font-weight: 500;
+			line-height: 0.95;
+			letter-spacing: 0.02em;
+		}
+
+		.title-block h2 {
+			margin: 14px 0 2px;
+			font-size: clamp(35px, 4.2vw, 42px);
+			font-weight: 800;
+			line-height: 1.05;
+			letter-spacing: -0.02em;
+		}
+
+		.title-block p {
+			margin: 0;
+			font-size: clamp(23px, 2.8vw, 28px);
+			color: var(--text-sub);
+			font-weight: 400;
+		}
+
+		.library-grid {
+			margin-top: 58px;
+			display: grid;
+			grid-template-columns: repeat(3, minmax(230px, 1fr));
+			gap: 36px;
+			align-items: start;
+		}
+
+		.mosaic-card {
+			border: 1px solid var(--card-border);
+			background: var(--card-bg);
+			padding: 20px 20px 16px;
+			cursor: pointer;
+			transition: transform 130ms ease, box-shadow 130ms ease;
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			width: 100%;
+		}
+
+		.mosaic-card:hover,
+		.mosaic-card:focus-visible {
+			transform: translateY(-5px);
+			box-shadow: var(--shadow-soft);
+			outline: none;
+		}
+
+		.mosaic-card:focus-visible {
+			box-shadow: var(--shadow-soft), 0 0 0 3px var(--focus-ring);
+		}
+
+		.preview-grid {
+			width: 100%;
+			aspect-ratio: 1 / 1;
+			background: #f6f6f6;
+			border: 1px solid rgba(255, 255, 255, 0.2);
+			display: grid;
+			gap: 1px;
+			padding: 6px;
+		}
+
+		.preview-cell {
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			min-width: 0;
+			min-height: 0;
+		}
+
+		.mosaic-name {
+			margin: 0;
+			text-align: center;
+			font-size: clamp(28px, 3.2vw, 40px);
+			line-height: 1;
+			font-weight: 700;
+			letter-spacing: -0.015em;
+            color: white;
+		}
+
+		.status {
+			margin-top: 24px;
+			min-height: 30px;
+			text-align: center;
+			font-size: 18px;
+			font-weight: 500;
+			color: white;
+		}
+
+		@media (max-width: 980px) {
+			body {
+				padding: 20px 18px 30px;
+        
+			}
+
+			.library-grid {
+				grid-template-columns: 1fr;
+				max-width: 460px;
+				margin: 42px auto 0;
+			}
+
+			.title-block h1 {
+				font-size: clamp(50px, 15vw, 62px);
+			}
+
+			.title-block h2 {
+				font-size: clamp(28px, 7.8vw, 36px);
+			}
+
+			.title-block p {
+				font-size: clamp(20px, 5.5vw, 26px);
+                color: white;
+			}
+
+			.mosaic-name {
+				font-size: clamp(26px, 7vw, 36px);
+                color: white;
+
+			}
+		}
+	</style>
+</head>
+<body>
+	<main class="page-shell">
+		<header class="topbar">
+			<button class="back-button" id="backButton" type="button" aria-label="Go back">
+				<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+					<path d="M15.5 5.5L9 12l6.5 6.5" />
+				</svg>
+			</button>
+		</header>
+        
+        <h1 class="headline">MIRA</h1>
+		<section class="title-block" aria-label="Library heading">
+			
+			<h2>Load from Library</h2>
+            <!-- White -->
+			<p>Browse ready-made mosaic templates</p>
+		</section>
+
+		<section class="library-grid" aria-label="Premade mosaics">
+			<button class="mosaic-card" type="button" data-endpoint="mosaic1" data-name="Flower" aria-label="Load Flower mosaic">
+				<div class="preview-grid" aria-hidden="true"></div>
+				<h3 class="mosaic-name">flower</h3>
+			</button>
+
+			<button class="mosaic-card" type="button" data-endpoint="mosaic2" data-name="Boat" aria-label="Load Boat mosaic">
+				<div class="preview-grid" aria-hidden="true"></div>
+				<h3 class="mosaic-name">boat</h3>
+			</button>
+
+			<button class="mosaic-card" type="button" data-endpoint="mosaic3" data-name="Moon" aria-label="Load Moon mosaic">
+				<div class="preview-grid" aria-hidden="true"></div>
+				<h3 class="mosaic-name">moon</h3>
+			</button>
+
+            <button class="mosaic-card" type="button" data-endpoint="mosaic4" data-name="Smiley" aria-label="Load Smiley mosaic">
+                <div class="preview-grid" aria-hidden="true"></div>
+                <h3 class="mosaic-name">smiley</h3>
+            </button>
+		</section>
+
+		<p class="status" id="statusText" aria-live="polite"></p>
+	</main>
+
+	<script>
+		const BACKEND_URL = "http://127.0.0.1:8000";
+		const backButton = document.getElementById("backButton");
+		const cards = document.querySelectorAll(".mosaic-card");
+		const statusText = document.getElementById("statusText");
+
+		function previewColor(colorName) {
+			if (!colorName || typeof colorName !== "string") {
+				return "#000000";
+			}
+
+			const colorMap = {
+				empty: "#000000",
+				black: "#000000",
+				green: "#1fb768",
+				cyan: "#30bfd4",
+				magenta: "#ce4fd5",
+				yellow: "#f1cc37",
+				blue: "#3f67ff",
+				red: "#e14949",
+				orange: "#dd8d31",
+				brown: "#8e5a33",
+				white: "#f3f3f3",
+				unknown: "#1a1d24"
+			};
+
+			return colorMap[colorName.toLowerCase()] || colorName;
+		}
+
+		function renderPreviewGrid(container, grid) {
+			if (!container || !Array.isArray(grid) || grid.length === 0) {
+				return;
+			}
+
+			container.innerHTML = "";
+			container.style.gridTemplateRows = `repeat(${grid.length}, 1fr)`;
+
+			const cols = grid[0].length || 0;
+			container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+			for (let row = 0; row < grid.length; row++) {
+				for (let col = 0; col < grid[row].length; col++) {
+					const cell = document.createElement("div");
+					cell.className = "preview-cell";
+					cell.style.backgroundColor = previewColor(grid[row][col]);
+					container.appendChild(cell);
+				}
+			}
+		}
+
+		async function loadLibraryPreviews() {
+			try {
+				const response = await fetch(`${BACKEND_URL}/mosaic_library`);
+				if (!response.ok) {
+					statusText.textContent = "Could not load previews from YAML.";
+					return;
+				}
+
+				const data = await response.json();
+				const mosaicByEndpoint = new Map((data.mosaics || []).map((mosaic) => [mosaic.endpoint, mosaic.grid]));
+
+				cards.forEach((card) => {
+					const endpoint = card.dataset.endpoint;
+					const grid = mosaicByEndpoint.get(endpoint);
+					const preview = card.querySelector(".preview-grid");
+					renderPreviewGrid(preview, grid);
+				});
+			} catch (error) {
+				statusText.textContent = "Network error while loading YAML previews.";
+			}
+		}
+
+		async function selectMosaic(endpoint, mosaicName) {
+			statusText.textContent = `Loading ${mosaicName}...`;
+
+			try {
+				const response = await fetch(`${BACKEND_URL}/${endpoint}`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json"
+					},
+					body: JSON.stringify({ name: mosaicName })
+				});
+
+				if (!response.ok) {
+					statusText.textContent = `Failed to load ${mosaicName} (${response.status}).`;
+					return;
+				}
+
+				statusText.textContent = `${mosaicName} selected. Returning to home...`;
+				// window.location.href = "index.html";
+                window.location.href = "display.html";
+			} catch (error) {
+				statusText.textContent = "Network error while loading mosaic.";
+			}
+		}
+
+		backButton.addEventListener("click", () => {
+			window.location.href = "index.html";
+		});
+
+		cards.forEach((card) => {
+			card.addEventListener("click", () => {
+				const endpoint = card.dataset.endpoint;
+				const mosaicName = card.dataset.name;
+				selectMosaic(endpoint, mosaicName);
+			});
+		});
+
+		loadLibraryPreviews();
+	</script>
+</body>
+</html>

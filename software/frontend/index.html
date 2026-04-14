@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>MIRA - Mosaic Library</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+	<style>
+    :root {
+      --page-bg: #0f1115;
+      --card-bg: #1b1f27;
+      --text-main: #f3f6ff;
+      --text-sub: #b8c0cf;
+      --preview-line: rgba(255, 255, 255, 0.2);
+      --grid-line: #4b5568;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page-bg);
+      color: var(--text-main);
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px 28px;
+    }
+
+    .headline {
+			font-family: 'Syne', sans-serif;
+			font-weight: 800;
+			font-size: clamp(48px, 8vw, 72px);
+			letter-spacing: -0.02em;
+			margin: 0;
+			text-align: center;
+			line-height: 1;
+			/* High-contrast white — no color that might confuse with state colors */
+			color: #fff;
+		}
+
+    .head-titel {
+      margin: 0;
+      font-size: clamp(52px, 7vw, 74px);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-align: center;
+    }
+
+    .mosaic-options {
+      width: min(1220px, 100%);
+      margin-top: 40px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(250px, 1fr));
+      gap: 42px;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    .button-tile {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      cursor: pointer;
+      background: var(--card-bg);
+      color: inherit;
+      padding: 28px 22px 34px;
+      text-align: center;
+      border-radius: 0;
+      transition: transform 140ms ease, box-shadow 140ms ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      min-height: 510px;
+    }
+
+    .button-tile:hover,
+    .button-tile:focus-visible {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.48);
+      outline: none;
+    }
+
+    .card-title {
+      margin-top: 18px;
+      margin-bottom: 0;
+      font-size: 37px;
+      font-weight: 700;
+      line-height: 1.08;
+      letter-spacing: -0.015em;
+    }
+
+    .card-subtitle {
+      margin: 0;
+      font-size: 37px;
+      font-weight: 400;
+      line-height: 1.08;
+      letter-spacing: -0.015em;
+      color: white;
+    }
+
+    .image-preview {
+      margin-top: 22px;
+      width: min(100%, 306px);
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border: 1px solid var(--preview-line);
+      display: block;
+    }
+
+    #gridContainer {
+      margin-top: 24px;
+    }
+
+    .grid-row {
+      display: flex;
+    }
+
+    .grid-cell {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--grid-line);
+      box-sizing: border-box;
+    }
+
+    .status-panel {
+      width: min(1220px, 100%);
+      margin-top: 28px;
+      font-size: 18px;
+      line-height: 1.45;
+      text-align: center;
+      color: var(--text-sub);
+    }
+
+    @media (max-width: 980px) {
+      .mosaic-options {
+        grid-template-columns: 1fr;
+        max-width: 460px;
+      }
+
+      .button-tile {
+        min-height: 440px;
+      }
+
+      .card-title,
+      .card-subtitle {
+        font-size: 31px;
+      }
+
+      .image-preview {
+        width: min(100%, 280px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1 class="headline">MIRA</h1>
+
+  <section class="mosaic-options" aria-label="Mosaic options">
+    <button class="button-tile" id="buttonOne" type="button" aria-label="Load from library">
+      <h2 class="card-title">Load from Library</h2>
+      <p class="card-subtitle">Browse ready-made mosaic templates</p>
+      <img class="image-preview" src="assets/boat.png" alt="Preview of library mosaic" aria-hidden="true" />
+
+    </button>
+
+    <button class="button-tile" id="buttonTwo" type="button" aria-label="Create new mosaic">
+      <h2 class="card-title">Create New Mosaic</h2>
+      <p class="card-subtitle">Start with a blank grid</p>
+      <img class="image-preview" src="assets/moon.png" alt="Preview of blank mosaic" aria-hidden="true" />
+    </button>
+
+    <button class="button-tile" id="buttonThree" type="button" aria-label="My mosaics">
+      <h2 class="card-title">My Mosaics</h2>
+      <p class="card-subtitle">Open your saved designs</p>
+      <img class="image-preview" src="assets/flower.png" alt="Preview of saved mosaic" aria-hidden="true" />
+    </button>
+  </section>
+
+  <section class="status-panel" aria-live="polite">
+    <p id="responseText">Waiting...</p>
+    <p id="positionText">Current position: waiting...</p>
+  </section>
+
+  <div id="gridContainer"></div>
+
+  <script>
+    // const sendBtn = document.getElementById("sendBtn");
+    const buttonOne = document.getElementById("buttonOne");
+    const buttonTwo = document.getElementById("buttonTwo");
+    const buttonThree = document.getElementById("buttonThree");
+    // const nameInput = document.getElementById("nameInput");
+    const responseText = document.getElementById("responseText");
+    const positionText = document.getElementById("positionText");
+    const gridContainer = document.getElementById("gridContainer");
+    let currentMosaic = null;
+
+    function resetCurrentMosaic() {
+      for (let row = 0; row < gridContainer.children.length; row++) {
+        const rowDiv = gridContainer.children[row];
+        for (let col = 0; col < rowDiv.children.length; col++) {
+          const cell = rowDiv.children[col];
+          
+          cell.style.border = "1px solid #4b5568"; // reset border
+          cell.style.opacity = "0.5"; // reset opacity
+          cell.style.backgroundColor = currentMosaic[row][col];
+        }
+      }
+    }
+
+    function showMosaicGrid(grid) {
+      gridContainer.innerHTML = "";
+
+      for (let row = 0; row < grid.length; row++) {
+        const rowDiv = document.createElement("div");
+        rowDiv.className = "grid-row";
+
+        for (let col = 0; col < grid[row].length; col++) {
+          const cell = document.createElement("div");
+          cell.className = "grid-cell";
+          cell.style.backgroundColor = grid[row][col];
+          // lower opacity value 
+          cell.style.opacity = "0.5";
+          rowDiv.appendChild(cell);
+        }
+
+        gridContainer.appendChild(rowDiv);
+      }
+    }
+
+    function highlight_target_cells(targets) {
+      // Reset first 
+      for (let row = 0; row < gridContainer.children.length; row++) {
+        const rowDiv = gridContainer.children[row];
+        for (let col = 0; col < rowDiv.children.length; col++) {
+          const cell = rowDiv.children[col];
+          cell.style.border = "1px solid #4b5568"; // reset border
+          cell.style.opacity = "0.5"; // reset opacity
+        }
+      }
+
+      // Highlight target cells
+      for (const target of targets) {
+        const cell = gridContainer.children[target.x].children[target.y];
+        if (cell) {
+          cell.style.border = "2px solid red";
+          cell.style.opacity = "1.0"; // make it fully opaque to highlight
+        }
+      }
+    }
+
+    function handle_cell_state(cell_state) {
+      if (!currentMosaic) return; // Ensure currentMosaic is defined before trying to reset it
+      resetCurrentMosaic();
+      for (const cell of cell_state) {
+        const grid_cell = gridContainer.children[cell.x].children[cell.y];
+  
+        if (grid_cell) {
+          if (cell.state === "correct") {
+            grid_cell.style.border = "2px solid green";
+            grid_cell.style.opacity = "1.0"; // make it fully opaque to highlight
+          } else if (cell.state === "incorrect") {
+            grid_cell.style.border = "2px solid red";
+            grid_cell.style.opacity = "0.5"; // make it fully opaque to highlight
+            // Shade the cell with a red overlay to indicate incorrect placement
+            grid_cell.style.backgroundColor = "rgba(255, 0, 0, 0.5)"; // red overlay with 50% opacity
+            
+          } else if (cell.state === "empty") {
+            grid_cell.style.border = "1px solid #4b5568";
+            
+            
+            // grid_cell.style.opacity = "0.5";
+          } else if (cell.state === "unknown") {
+            grid_cell.style.border = "1px dashed #818ea3";
+            // grid_cell.style.opacity = "0.5";
+          }
+        }
+      }
+    }
+
+
+    async function postName(endpoint) {
+      let name;
+      if (endpoint === "greet") {
+        name = nameInput.value;
+      } else {
+        name = endpoint;
+      }
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/${endpoint}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ name: name })
+        });
+
+        if (!res.ok) {
+          responseText.textContent = `Request failed (${res.status}) for ${endpoint}`;
+          return;
+        }
+
+        const data = await res.json();
+        responseText.textContent = data.message;
+        currentMosaic = data.grid;
+        if (data.grid) {
+          showMosaicGrid(data.grid);
+        }
+      } catch (error) {
+        responseText.textContent = `Network error for ${endpoint}`;
+      }
+    }
+
+    async function fetchCurrentPosition() {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/current_position");
+
+        if (!res.ok) {
+          positionText.textContent = `Current position request failed (${res.status})`;
+          return;
+        }
+
+        positionText.textContent = "Current position: loading again...";
+
+        const data = await res.json();
+        const pos = data.current_position;
+        const color = data.current_color;
+        let targets = data.targets;
+
+        if (!pos || !color || !targets) {
+          positionText.textContent = "Undefined position or color";
+          
+         
+          return;
+        }
+        // Hard code (0,0) for testing
+        // targets = [{x: 0, y: 0}];
+      
+        // highlight_target_cells(targets);
+        // Display target xnd y values in console for debugging
+        highlight_target_cells(targets);
+
+        positionText.textContent = `Current position: x=${pos.x}, y=${pos.y}, color=${color}`;
+        positionText.textContent += ` (targets: ${targets.map(t => `x=${t.x},y=${t.y}`).join("; ")})`;
+      } catch (error) {
+        positionText.textContent = "Current position or color: network error";
+      }
+    }
+
+
+
+
+    function connectWebSocket() {
+      const ws = new WebSocket("ws://localhost:8000/ws");
+
+      ws.onopen = () => {
+        console.log("WebSocket connected");
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const pos = data.current_position;
+        const color = data.current_color;
+        const targets = data.targets;
+        const cell_state = data.cell_state;
+
+        if (!pos || !color || !targets) {
+          handle_cell_state(cell_state);
+          positionText.textContent = "Undefined position or color";
+          return;
+        }
+
+    
+        handle_cell_state(cell_state);
+        highlight_target_cells(targets);
+
+        positionText.textContent = `Current position: x=${pos.x}, y=${pos.y}, color=${color}`;
+        positionText.textContent += ` (targets: ${targets.map(t => `x=${t[0]},y=${t[1]}`).join("; ")})`;
+
+        console.log(data);
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        positionText.textContent = "WebSocket error";
+      };
+
+      ws.onclose = () => {
+        console.log("Disconnected, retrying...");
+        setTimeout(connectWebSocket, 1000);
+      };
+    }
+
+
+
+    // sendBtn.addEventListener("click", async () => {
+    //   await postName("greet");
+    // });
+
+    buttonOne.addEventListener("click", () => {
+      window.location.href = "library.html";
+    });
+
+    buttonTwo.addEventListener("click", async () => {
+      await postName("mosaic2");
+    });
+
+    buttonThree.addEventListener("click", async () => {
+      await postName("mosaic3");
+    });
+
+    connectWebSocket();
+
+    // fetchCurrentPosition();
+    // setInterval(fetchCurrentPosition, 1000);
+  </script>
+</body>
+</html>
+
+
+<!-- 
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FastAPI Name Test</title>
+  <style>
+    #gridContainer {
+      margin-top: 20px;
+    }
+
+    .grid-row {
+      display: flex;
+    }
+
+    .grid-cell {
+      width: 40px;
+      height: 40px;
+      border: 1px solid black;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <h1>Name Test</h1>
+
+  <input type="text" id="nameInput" placeholder="Enter your name" />
+  <button id="sendBtn">Send</button>
+  <button id="buttonOne">Mosaic 1</button>
+  <button id="buttonTwo">Mosaic 2</button>
+  <button id="buttonThree">Mosaic 3</button>
+
+  <p id="responseText">Waiting...</p>
+  <p id="positionText">Current position: waiting...</p>
+
+  <div id="gridContainer"></div>
+
+  <script>
+    const sendBtn = document.getElementById("sendBtn");
+    const buttonOne = document.getElementById("buttonOne");
+    const buttonTwo = document.getElementById("buttonTwo");
+    const buttonThree = document.getElementById("buttonThree");
+    const nameInput = document.getElementById("nameInput");
+    const responseText = document.getElementById("responseText");
+    const positionText = document.getElementById("positionText");
+    const gridContainer = document.getElementById("gridContainer");
+    let currentMosaic = null;
+
+    function resetCurrentMosaic() {
+      for (let row = 0; row < gridContainer.children.length; row++) {
+        const rowDiv = gridContainer.children[row];
+        for (let col = 0; col < rowDiv.children.length; col++) {
+          const cell = rowDiv.children[col];
+          
+          cell.style.border = "1px solid black"; // reset border
+          cell.style.opacity = "0.5"; // reset opacity
+          cell.style.backgroundColor = currentMosaic[row][col];
+        }
+      }
+    }
+
+    function showMosaicGrid(grid) {
+      gridContainer.innerHTML = "";
+
+      for (let row = 0; row < grid.length; row++) {
+        const rowDiv = document.createElement("div");
+        rowDiv.className = "grid-row";
+
+        for (let col = 0; col < grid[row].length; col++) {
+          const cell = document.createElement("div");
+          cell.className = "grid-cell";
+          cell.style.backgroundColor = grid[row][col];
+          // lower opacity value 
+          cell.style.opacity = "0.5";
+          rowDiv.appendChild(cell);
+        }
+
+        gridContainer.appendChild(rowDiv);
+      }
+    }
+
+    function highlight_target_cells(targets) {
+      // Reset first 
+      for (let row = 0; row < gridContainer.children.length; row++) {
+        const rowDiv = gridContainer.children[row];
+        for (let col = 0; col < rowDiv.children.length; col++) {
+          const cell = rowDiv.children[col];
+          cell.style.border = "1px solid black"; // reset border
+          cell.style.opacity = "0.5"; // reset opacity
+        }
+      }
+
+      // Highlight target cells
+      for (const target of targets) {
+        const cell = gridContainer.children[target.x].children[target.y];
+        if (cell) {
+          cell.style.border = "2px solid red";
+          cell.style.opacity = "1.0"; // make it fully opaque to highlight
+        }
+      }
+    }
+
+    function handle_cell_state(cell_state) {
+      if (!currentMosaic) return; // Ensure currentMosaic is defined before trying to reset it
+      resetCurrentMosaic();
+      for (const cell of cell_state) {
+        const grid_cell = gridContainer.children[cell.x].children[cell.y];
+  
+        if (grid_cell) {
+          if (cell.state === "correct") {
+            grid_cell.style.border = "2px solid green";
+            grid_cell.style.opacity = "1.0"; // make it fully opaque to highlight
+          } else if (cell.state === "incorrect") {
+            grid_cell.style.border = "2px solid red";
+            grid_cell.style.opacity = "0.5"; // make it fully opaque to highlight
+            // Shade the cell with a red overlay to indicate incorrect placement
+            grid_cell.style.backgroundColor = "rgba(255, 0, 0, 0.5)"; // red overlay with 50% opacity
+            
+          } else if (cell.state === "empty") {
+            grid_cell.style.border = "1px solid black";
+            
+            
+            // grid_cell.style.opacity = "0.5";
+          } else if (cell.state === "unknown") {
+            grid_cell.style.border = "1px dashed gray";
+            // grid_cell.style.opacity = "0.5";
+          }
+        }
+      }
+    }
+
+
+    async function postName(endpoint) {
+      let name;
+      if (endpoint === "greet") {
+        name = nameInput.value;
+      } else {
+        name = endpoint;
+      }
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/${endpoint}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ name: name })
+        });
+
+        if (!res.ok) {
+          responseText.textContent = `Request failed (${res.status}) for ${endpoint}`;
+          return;
+        }
+
+        const data = await res.json();
+        responseText.textContent = data.message;
+        currentMosaic = data.grid;
+        if (data.grid) {
+          showMosaicGrid(data.grid);
+        }
+      } catch (error) {
+        responseText.textContent = `Network error for ${endpoint}`;
+      }
+    }
+
+    async function fetchCurrentPosition() {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/current_position");
+
+        if (!res.ok) {
+          positionText.textContent = `Current position request failed (${res.status})`;
+          return;
+        }
+
+        positionText.textContent = "Current position: loading again...";
+
+        const data = await res.json();
+        const pos = data.current_position;
+        const color = data.current_color;
+        let targets = data.targets;
+
+        if (!pos || !color || !targets) {
+          positionText.textContent = "Undefined position or color";
+          
+         
+          return;
+        }
+        // Hard code (0,0) for testing
+        // targets = [{x: 0, y: 0}];
+      
+        // highlight_target_cells(targets);
+        // Display target xnd y values in console for debugging
+        highlight_target_cells(targets);
+
+        positionText.textContent = `Current position: x=${pos.x}, y=${pos.y}, color=${color}`;
+        positionText.textContent += ` (targets: ${targets.map(t => `x=${t.x},y=${t.y}`).join("; ")})`;
+      } catch (error) {
+        positionText.textContent = "Current position or color: network error";
+      }
+    }
+
+
+
+
+    function connectWebSocket() {
+      const ws = new WebSocket("ws://localhost:8000/ws");
+
+      ws.onopen = () => {
+        console.log("WebSocket connected");
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const pos = data.current_position;
+        const color = data.current_color;
+        const targets = data.targets;
+        const cell_state = data.cell_state;
+
+        if (!pos || !color || !targets) {
+          handle_cell_state(cell_state);
+          positionText.textContent = "Undefined position or color";
+          return;
+        }
+
+    
+        handle_cell_state(cell_state);
+        highlight_target_cells(targets);
+
+        positionText.textContent = `Current position: x=${pos.x}, y=${pos.y}, color=${color}`;
+        positionText.textContent += ` (targets: ${targets.map(t => `x=${t[0]},y=${t[1]}`).join("; ")})`;
+
+        console.log(data);
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        positionText.textContent = "WebSocket error";
+      };
+
+      ws.onclose = () => {
+        console.log("Disconnected, retrying...");
+        setTimeout(connectWebSocket, 1000);
+      };
+    }
+
+
+
+    sendBtn.addEventListener("click", async () => {
+      await postName("greet");
+    });
+
+    buttonOne.addEventListener("click", async () => {
+      await postName("mosaic1");
+    });
+
+    buttonTwo.addEventListener("click", async () => {
+      await postName("mosaic2");
+    });
+
+    buttonThree.addEventListener("click", async () => {
+      await postName("mosaic3");
+    });
+
+    connectWebSocket();
+
+    // fetchCurrentPosition();
+    // setInterval(fetchCurrentPosition, 1000);
+  </script>
+</body>
+</html> -->

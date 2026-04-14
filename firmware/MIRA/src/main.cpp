@@ -3,264 +3,176 @@
 
 
 
-
-
 #include <vector>
 #include <map>
-#include <Arduino.h>
+
 
 #include <esp_now.h>
+#include <esp_err.h>
 #include <WiFi.h>
 
-
-#include <Arduino.h>
 #include "rfid.h"
 #include "mosiac.h"
+#include <set>
+
+
+// Button map 
+const int NUM_ROWS = 6;
+const int NUM_COLS = 6;
+
+// Put all ROWS on one side of the dev board
+const int rowPins[NUM_ROWS] = {13, 14, 27, 26, 25, 33};
+
+// Put all COLUMNS on the other side of the dev board
+const int colPins[NUM_COLS] = {23, 22, 21, 19, 18, 32};
+
+//NOTE: on physical board, wire the rows to the assigned column pins, wire the columns to assigned row pins... will fix later, dont fix rn
+
+// Store previous button states for simple debounce / change detection
+bool stableState[NUM_ROWS][NUM_COLS];
+bool lastReading[NUM_ROWS][NUM_COLS];
+unsigned long lastDebounceTime[NUM_ROWS][NUM_COLS];
+
+const unsigned long debounceDelay = 30;   // ms
+const unsigned long printInterval = 250;  // ms
+unsigned long lastPrintTime = 0;
+
+
+
 
 // ESP now receiver's MAC
 uint8_t receiverMAC[] = {0x64, 0xE8, 0x33, 0x51, 0xCD, 0xFC};
 // 64:E8:33:51:CD:FC
 
-typedef struct __attribute__((packed)){
-  float magnitude;   // 0.0 → 1.0 normalized distance
-  int8_t dx;         // -1, 0, 1
-  int8_t dy;         // -1, 0, 1
+// State
+// STOP = -1 
+// LOST = 0
+// GUIDE = 1
+// CLOSE = 2
+// REACHED = 3
+typedef struct {
+  float magnitude;
+  int16_t dx;
+  int16_t dy;
+  int8_t state;
+  CellPos currentPos;
 } FeedbackPacket;
-using namespace std;
+
+typedef struct {
+  float magnitude;
+  int8_t state;
+} FeedbackPacketSmall;
+
+FeedbackPacket currFeedback;
+
 
 //INIT PARAMETERS 
 int const offset = 200; 
-int const gridRows = 4; 
-int const gridCols = 4;
+int const gridRows = 8; 
+int const gridCols = 8;
 float const epsilon = 0.0; 
 int const buzzer = 9;
 int const threshold = 100;
 
-// Color map dictionary 
-String id_to_color[4] = {
-  "Red", // 0
-  "Green", // 1
-  "Cyan", 
-  "Magenta"
-};
+unsigned long lastPacketMs = 0;
+bool hasFeedback = false;
+const unsigned long FEEDBACK_TIMEOUT_MS = 300;
+bool newFeedback = false;
+bool hasFirstModelUpdate = false;
 
-int color_to_id(String color) {
-  if (color == "Red") return 0;
-  else if (color == "Green") return 1;
-  else if (color == "Cyan") return 2;
-  else if (color == "Magenta") return 3;
-  return 0; 
+volatile bool espNowSendInFlight = false;
+unsigned long nextSendAllowedMs = 0;
+const unsigned long MIN_SEND_INTERVAL_MS = 25;
+const unsigned long SEND_ERROR_BACKOFF_MS = 100;
+
+const int8_t STOP_STATE = -1;
+const int8_t LOST_STATE = 0;
+
+void onEspNowSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  (void)mac_addr;
+  espNowSendInFlight = false;
+  if (status != ESP_NOW_SEND_SUCCESS) {
+    Serial.println("ESP-NOW delivery failed at MAC layer");
+  }
 }
 
 
-// Mux address pins
-
-const int MUX_S0 = 25; // LSB
-const int MUX_S1 = 26;
-const int MUX_S2 = 33;
-const int MUX_S3 = 15;   // MSB
-
-
-// // Mux common signal -> ESP32 ADC pin
-const int MUX_SIG_PIN = 32;  // ADC1_CH4
-
-// Buffer to hold current sensor readings for heatmap display
-int sensorBuffer[gridRows][gridCols];
-
-
-// Test mosaic (4x4)
-String mosaic[gridRows][gridCols] = {
-  {"Red",     "Red",   "Red",     "Red"},
-  {"Green",   "Green",    "Green",  "Green"},
-  {"Cyan",    "Cyan", "Cyan",      "Cyan"},
-  {"Magenta", "Magenta",     "Magenta",    "Magenta"}
-};
-
-int baseline[gridRows][gridCols];
 
 
 
-Mosiac mosiac;
 
-// A struct representing one hall-effect sensing cell
-struct SenseCell {
-  CellPos cellPosData; 
-  int sensorVal;
- // int sensorPin;
-  bool occupied = false; 
+// April Tag localization 
 
-  // Constructor
-  SenseCell(int x = 0, int y = 0)
-      :  cellPosData( CellPos(x, y)), sensorVal(0) { }
+// char buffer[64]; // Buffer for serial input
+// void debug_tag_locations() {
+//   if (Serial.available()) {
+//     int len = Serial.readBytesUntil('\n', buffer, sizeof(buffer) - 1);
+//     buffer[len] = '\0';  // terminate string
 
-  void debug() const {
-    Serial.print("Position: (");
-    Serial.print(cellPosData.posX);
-    Serial.print(", ");
-    Serial.print(cellPosData.posY);
-    Serial.print("), Sensor Pin: ");
-    //Serial.print(sensorPin);
-    Serial.print(", Value: ");
-    Serial.println(sensorVal);
-  }
+//     Serial.print("RX: ");
+//     Serial.println(buffer);
+//   }
+
+// }
 
 
-  // int getSensorPin() const {
-  //   return sensorPin;
-  // }
 
-  int getSensorVal() const {
-    return sensorVal;
-  }
 
-  // Update with calibrated baseline
-  void updateVal(float val) {
-    sensorVal = abs(val - baseline[cellPosData.posX][cellPosData.posY]);
-    // To check for occupancy, we can set a threshold above baseline. 
-    occupied = (sensorVal > threshold);
 
-  }
-};
+void giveFeedback(float distance, int state) {
+
+
   
+  // Print 
+  // Serial.print("Distance to target: ");
+  // Serial.println(distance);
 
-// matrix of sensors and sensemat data structure 
-SenseCell senseMat[gridRows][gridCols];
-// Select channel 0..15 on the mux
-void setMuxChannel(uint8_t ch) {
-  digitalWrite(MUX_S0, (ch & 0x01) ? HIGH : LOW);
-  digitalWrite(MUX_S1, (ch & 0x02) ? HIGH : LOW);
-  digitalWrite(MUX_S2, (ch & 0x04) ? HIGH : LOW);
-  digitalWrite(MUX_S3, (ch & 0x08) ? HIGH : LOW);
-  delayMicroseconds(5);  // settle
-}
-
-// Return the cell with the highest sensor reading
-// Mux localization 
-
-SenseCell* localize() {
-  SenseCell* maxCell = nullptr;
-  int maxVal = -1;
-  for (int ch = 0; ch < gridRows * gridCols; ch++) { // 0..15
-    setMuxChannel(ch);
-    int raw = analogRead(MUX_SIG_PIN);  // 0..4095
-
-    float val = (float) raw;
-
-    int physRow = ch / gridCols;   // physical row from mux order
-    int physCol = ch % gridCols;   // physical col from mux order
-    
-    // Flip vertically: logical row 0 = top, 3 = bottom
-    int row = gridRows - 1 - physRow;
-    int col = physCol;
-    senseMat[row][col].updateVal(val);
-    sensorBuffer[row][col] = senseMat[row][col].getSensorVal();
-    // Only look at unoccupied cells  
-    if (senseMat[row][col].getSensorVal() > maxVal ) {
-      maxVal = senseMat[row][col].getSensorVal();
-      maxCell = &senseMat[row][col];
-    }
-  
-  }
-
-  // No moving magnet tile detected, return null
-  if (maxVal < threshold) {
-   // Serial.println("No tile detected. Please place a tile.");
-    return nullptr;
-  }
-
-  //Serial.print("Max Cell Sensor: ");
-  //maxCell->debug();
-  return maxCell;
-
-}
-
-
-//CSV format for heatmap 
-void display(const std::set<CellPos>& targets) {     
-  // Send CSV rows
-  for (int i = 0; i < gridRows; i++) {
-    for (int j = 0; j < gridCols; j++) {
-      Serial.print(sensorBuffer[i][j]);
-      if (j < gridCols - 1) {
-        Serial.print(",");
-      }
-    }
-    Serial.println();
-  }
-
-  // Send target marker: T,row,col
-  for (const CellPos& target : targets) {
-    Serial.print("T,");
-    Serial.print(target.posX); // row
-    Serial.print(",");
-    Serial.println(target.posY); // col
-  }
-
-  Serial.println("---"); // frame separator
-  delay(50);
-}
-
-
-// Compute absolute distance vector between current and target cells
-// Calculate vector to closest target if multiple targets 
-CellPos calculateVector(const std::set<CellPos>& targets, const SenseCell* current) {
-  CellPos closestTarget = *targets.begin();
-  int minDistance = INT_MAX;
-  for (const CellPos& target : targets) {
-    int distance = abs(current->cellPosData.posX - target.posX) + abs(current->cellPosData.posY - target.posY);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestTarget = target;
-    }
-  }
-  return CellPos(
-    abs(current->cellPosData.posX - closestTarget.posX),
-    abs(current->cellPosData.posY - closestTarget.posY)
-  );
-}
-
-
-
-void giveFeedback(const CellPos& diff) {
-  float distance = sqrt(diff.posX * diff.posX + diff.posY * diff.posY);
-
-  // float maxDistance = 2.0;
-  // float magnitude = min(distance / maxDistance, 1.0f);
-
-  // Normalize direction (+1, 0, -1)
-  // int8_t dx = (diff.posX > 0) - (diff.posX < 0);
-  // int8_t dy = (diff.posY > 0) - (diff.posY < 0);
-
-  // if (dx == 0 && dy == 0) {
-  //   // No movement needed
-  //   magnitude = 0.0;
-  // }
-
-  FeedbackPacket packet;
+  FeedbackPacketSmall packet;
   packet.magnitude = distance;
-  packet.dx = diff.posX;
-  packet.dy = diff.posY;
-  
-  esp_now_send(receiverMAC, (uint8_t *)&packet, sizeof(packet));
+  packet.state = state;
+
+  unsigned long now = millis();
+  if (espNowSendInFlight || now < nextSendAllowedMs) {
+    return;
+  }
+
+  espNowSendInFlight = true;
+  nextSendAllowedMs = now + MIN_SEND_INTERVAL_MS;
+
+  esp_err_t result = esp_now_send(receiverMAC, (uint8_t *)&packet, sizeof(packet));
+
+  if (result != ESP_OK) {
+    espNowSendInFlight = false;
+    nextSendAllowedMs = now + SEND_ERROR_BACKOFF_MS;
+    Serial.print("ESP-NOW send failed: ");
+    Serial.print(esp_err_to_name(result));
+    Serial.print(" (");
+    Serial.print(result);
+    Serial.println(")");
+  }
 }
+
+void sendStopCommand() {
+  giveFeedback(-1.0f, STOP_STATE);
+}
+
+
 
 // Target guidance loop 
-void guideToTarget(const std::set<CellPos>& targets) {
+void guideToTarget(const FeedbackPacket& feedbackPacket) {
 
     //Find current cell user is hovering over 
-    SenseCell* current = localize();
-    display(targets);
+    //SenseCell* current = localize();
+    //display(targets);
     
-    if (current == nullptr) {
-      // Send empty feedback or some signal that no tile is detected
-      FeedbackPacket packet;
-      packet.magnitude = -1.0; // Use -1 to indicate no tile detected
-      packet.dx = 0;
-      packet.dy = 0;
-      esp_now_send(receiverMAC, (uint8_t *)&packet, sizeof(packet));
-      
-      //Serial.println("No tile detected. Please place a tile.");
-      //delay(1000);
+    if (feedbackPacket.state == STOP_STATE) {
+      sendStopCommand();
+      return;
+    }
+
+    if (feedbackPacket.currentPos.row < 0 || feedbackPacket.currentPos.row >= gridRows || feedbackPacket.currentPos.col < 0 || feedbackPacket.currentPos.col >= gridCols) {
+      // Send empty feedback or some signal that no tile movement is detected
+      giveFeedback(-1.0f, LOST_STATE); // Indicate no tile detected
       return;
     }
   
@@ -268,64 +180,18 @@ void guideToTarget(const std::set<CellPos>& targets) {
 
     
     //display();
-    //Calculate absolute vector difference magnitude 
-    CellPos diff = calculateVector(targets, current);
+
 
     // Serial.print("Position: (");
-    // Serial.print(current->cellPosData.posX);
+    // Serial.print(feedbackPacket.currentPos.row);
     // Serial.print(", ");
-    // Serial.print(current->cellPosData.posY);
+    // Serial.print(feedbackPacket.currentPos.col);
     // Serial.print(") ");
-    giveFeedback(diff);
+    giveFeedback(feedbackPacket.magnitude, feedbackPacket.state);
 
-    // Exit when user reaches target ish area 
-    // if (diff.posX <= epsilon && diff.posY <= epsilon) {
-    //   break;
-    // }
- 
 
    //delay(300);
   
-}
-
-// Setup the mapping from color list of positions
-void initializeMosaicMap() {
-  for (int i = 0; i < gridRows; i++) {
-    for (int j = 0; j < gridCols; j++) {
-      String color = mosaic[i][j];
-      // mosaicMap[color].push_back(CellPos(i, j));
-      int colorIndex = color_to_id(color);
-      mosiac.addCellToColor(colorIndex, CellPos(i, j));
-    }
-  }
-}
-
-
-
-
-// Use MUX 
-void calibrateSensors() {
-
-
-
-  for (int ch = 0; ch < gridRows * gridCols; ch++) { // 0..15
-      long sum = 0;
-      for (int k = 0; k < 400; k++) {
-        setMuxChannel(ch);
-        int raw = analogRead(MUX_SIG_PIN);  // 0..4095
-        sum += raw; // raw read
-        delay(2);
-      }
-    int physRow = ch / gridCols;   // physical row from mux order
-    int physCol = ch % gridCols;   // physical col from mux order
-    
-    // Flip vertically: logical row 0 = top, 3 = bottom
-    int row = gridRows - 1 - physRow;
-    int col = physCol;
-    baseline[row][col] = sum / 400; // average baseline
-  }
-  Serial.println("MUX Calibration complete.");
-   
 }
 
 
@@ -353,18 +219,32 @@ static uint32_t lastActionMs = 0;
 
 RFID rfid(RFID_SS, RFID_RST, RFID_SCK, RFID_MISO, RFID_MOSI);
 
-void setup() {
-  Serial.begin(250000);
-  delay(2000);
-  // Initialize mosaic map
-  initializeMosaicMap();
+void initializeRFID() {
+  if (!rfid.begin()) {
+    Serial.println("RFID init FAILED. Check 3.3V, GND, and SPI wiring.");
+    while (true) { delay(1000); }
+  }
+  Serial.println("RFID init OK. Tap a tag...");
+}
 
-  mosiac.debug();
+
+
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+  
+
 
   // Initialize WiFi in station mode for ESP-NOW
   WiFi.mode(WIFI_STA);   // ESP-NOW works in station mode
+  WiFi.setSleep(false);
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  if (esp_now_register_send_cb(onEspNowSend) != ESP_OK) {
+    Serial.println("Failed to register ESP-NOW send callback");
     return;
   }
 
@@ -379,34 +259,41 @@ void setup() {
     return;
   }
 
+  // Safety: command stop before the model starts streaming updates.
+  sendStopCommand();
 
-  // Initialize RFID reader
-  if (!rfid.begin()) {
-    Serial.println("RFID init FAILED. Check 3.3V, GND, and SPI wiring.");
-    while (true) { delay(1000); }
+  // Intitalize button map 
+   for (int r = 0; r < NUM_ROWS; r++) {
+    pinMode(rowPins[r], OUTPUT);
+    digitalWrite(rowPins[r], HIGH); // inactive row = HIGH
   }
 
-  //Serial.println("RFID init OK. Tap a tag...");
+  for (int c = 0; c < NUM_COLS; c++) {
+    pinMode(colPins[c], INPUT_PULLUP);
+  }
 
-  // Setup mux
-  // Setup 4 pins that feed into hall effect sensors
-  Serial.println("Initializing sensors...");
-  for (int i = 0; i < gridRows; i++) {
-    for (int j = 0; j < gridCols; j++) {
-      //pinMode(pins[i][j], INPUT);
-     senseMat[i][j] = SenseCell(i, j);
+  for (int r = 0; r < NUM_ROWS; r++) {
+    for (int c = 0; c < NUM_COLS; c++) {
+      stableState[r][c] = false;
+      lastReading[r][c] = false;
+      lastDebounceTime[r][c] = 0;
     }
   }
 
-  pinMode(MUX_S0, OUTPUT);
-  pinMode(MUX_S1, OUTPUT);
-  pinMode(MUX_S2, OUTPUT);
-  pinMode(MUX_S3, OUTPUT);
 
-  pinMode(MUX_SIG_PIN, INPUT);
+  // Initialize RFID reader
+  //initializeRFID();
+  // Setup mux
+  // Setup 4 pins that feed into hall effect sensors
+  // Serial.println("Initializing sensors...");
+  // for (int i = 0; i < gridRows; i++) {
+  //   for (int j = 0; j < gridCols; j++) {
+  //     //pinMode(pins[i][j], INPUT);
+  //    senseMat[i][j] = SenseCell(i, j);
+  //   }
+  // }
 
 
-  calibrateSensors();
   Serial.println("System initialized.\n");
 
 }
@@ -433,49 +320,222 @@ String handleWrite() {
   bool success = rfid.writeBlock(colorIndex);
   if (success) {
     Serial.print("Wrote block with color: ");
-    Serial.println(id_to_color[colorIndex]);
-    return id_to_color[colorIndex];
+
+
   } else {
     Serial.println("Failed to write block.");
     return "";
   }
 }
 
-CellPos colorToCellPos(const String& color) {
-  if (color == "Red") return CellPos(0, 0);
-  if (color == "Green") return CellPos(0, 1);
-  if (color == "Cyan") return CellPos(1, 0);
-  if (color == "Magenta") return CellPos(1, 1);
-  return CellPos(-1, -1); // Invalid color
+
+// Targets is a set 
+
+
+// Update current target and current position
+void update() {
+  newFeedback = false;
+
+
+  if (Serial.available()) {
+    
+    String line = Serial.readStringUntil('\n');
+    line.trim();
+    float magnitude = 0.0f;
+    int dx = 0;
+    int dy = 0;
+    int state = 0;
+    int currentX = -1;
+    int currentY = -1;
+    int parsed = sscanf(
+      line.c_str(),
+      "%f,%d,%d,%d,%d,%d",
+      &magnitude,
+      &dx,
+      &dy,
+      &state,
+      &currentX,
+      &currentY
+    );
+
+
+    if (parsed == 6) {
+      // Send ACK back to Python
+      Serial.print("ACK,");
+      Serial.print(magnitude, 2); Serial.print(",");
+      Serial.print(dx); Serial.print(",");
+      Serial.print(dy); Serial.print(",");
+      Serial.print(state); Serial.print(",");
+      Serial.print(currentX); Serial.print(",");
+      Serial.println(currentY);
+      currFeedback.magnitude = magnitude;
+      currFeedback.dx = dx;
+      currFeedback.dy = dy;
+      currFeedback.state = state;
+      currFeedback.currentPos = CellPos(currentX, currentY);
+
+      // Send packet back to TX to debug
+
+    
+      lastPacketMs = millis();
+      hasFeedback = true;
+      newFeedback = true;
+      hasFirstModelUpdate = true;
+    } else {
+      Serial.print("Bad packet: ");
+      Serial.println(line);
+    }
+  }
 }
 
 
-// Targets is a set 
-std::set<CellPos> currTarget; 
-void loop() {
-  RFIDRead r = rfid.poll();
-  // if (!r.present) return;
 
-  guideToTarget(currTarget);
-  
-  uint32_t now = millis();
-  if (r.uid32 == lastUid && (now - lastActionMs) < 800) {
+void scanMatrix() {
+  for (int r = 0; r < NUM_ROWS; r++) {
+    for (int i = 0; i < NUM_ROWS; i++) {
+      digitalWrite(rowPins[i], HIGH);
+    }
+
+    digitalWrite(rowPins[r], LOW);
+    delayMicroseconds(50);
+
+    for (int c = 0; c < NUM_COLS; c++) {
+      bool pressed = (digitalRead(colPins[c]) == LOW);
+
+      if (pressed != lastReading[r][c]) {
+        lastDebounceTime[r][c] = millis();
+        lastReading[r][c] = pressed;
+      }
+
+      if ((millis() - lastDebounceTime[r][c]) > debounceDelay) {
+        stableState[r][c] = pressed;
+      }
+    }
+  }
+
+  for (int i = 0; i < NUM_ROWS; i++) {
+    digitalWrite(rowPins[i], HIGH);
+  }
+}
+
+void printReadableMatrix() {
+  Serial.println("Current switch grid:");
+  Serial.println();
+
+  Serial.print("      ");
+  for (int c = 0; c < NUM_COLS; c++) {
+    Serial.print("C");
+    Serial.print(c + 1);
+    Serial.print(" ");
+  }
+  Serial.println();
+
+  for (int r = 0; r < NUM_ROWS; r++) {
+    Serial.print("R");
+    Serial.print(r + 1);
+    Serial.print(" ->  ");
+
+    for (int c = 0; c < NUM_COLS; c++) {
+      Serial.print(stableState[r][c] ? " X " : " . ");
+    }
+    Serial.println();
+  }
+}
+
+void printPressedSummary() {
+  bool anyPressed = false;
+
+  // Serial.println();
+  // Serial.println("Pressed switches:");
+  // Package format is list of CellPos 
+ 
+  if (!anyPressed) {
+    Serial.println("None");
+  } else {
+    Serial.print("PRESSED:");
+
+    for (int r = 0; r < NUM_ROWS; r++) {
+      for (int c = 0; c < NUM_COLS; c++) {
+        if (stableState[r][c]) {
+          Serial.print(r);
+          Serial.print(",");
+          Serial.print(c);
+          Serial.print(";");
+
+          anyPressed = true;
+        }
+      }
+    }
+
+    Serial.println();  
+  }
+
+
+}
+
+void loop() {
+  //RFIDRead r = rfid.poll();
+  // if (!r.present) return;
+  // debug_tag_locations();
+  static bool timeoutSent = false;
+
+  update();
+
+  // Do not drive haptics/motor until the first valid model update arrives.
+  if (!hasFirstModelUpdate) {
     return;
   }
-  lastUid = r.uid32;
-  lastActionMs = now;
+  guideToTarget(currFeedback);
+
+  // if (newFeedback) {
+  //   guideToTarget(currFeedback);
+  //   timeoutSent = false;
+  // } else if (hasFeedback && millis() - lastPacketMs > FEEDBACK_TIMEOUT_MS) {
+  //   if (!timeoutSent) {
+  //     sendStopCommand();
+  //     timeoutSent = true;
+  //   }
+  // }
+
+  // scanMatrix();
+  // if (millis() - lastPrintTime >= printInterval) {
+  //   lastPrintTime = millis();
+  //   // printReadableMatrix();
+  //   printPressedSummary();
+  // }
+
+  // Recieved feedback packet and its fresh 
+  // if (hasFeedback && millis() - lastPacketMs <= FEEDBACK_TIMEOUT_MS) {
+  //   if (newFeedback) {
+  //     guideToTarget(currFeedback);
+  //     timeoutSent = false;
+  //   }
+  // } else {
+  //   if (!timeoutSent) { 
+  //     giveFeedback(-1.0f, 0);
+  //     timeoutSent = true;
+  //   }
+  // }
+    
+  // uint32_t now = millis();
+  // if (r.uid32 == lastUid && (now - lastActionMs) < 800) {
+  //   return;
+  // }
+  // lastUid = r.uid32;
+  // lastActionMs = now;
     
 
 
-  if (r.present && readMode) {
-    // If it's the same tag still sitting there, don't keep re-reading
-    int colorIndex = handleRead();
-    //Serial.println("Color read: " + id_to_color[colorIndex]);
-    if (colorIndex >= 0) {
-      auto positions = mosiac.getTargetCells(colorIndex);
-      currTarget = positions; // Update global target set
-    }
-    // if (!positions.empty()) {
+
+  // if (r.present && readMode) {
+  //   // If it's the same tag still sitting there, don't keep re-reading
+  //   int colorIndex = handleRead();
+  //   //Serial.println("Color read: " + id_to_color[colorIndex]);
+  //   if (colorIndex >= 0) {
+  //     auto positions = mosiac.getTargetCells(colorIndex);
+  //     currTarget = positions; // Update global target set
+  //   }
+  //   // if (!positions.empty()) {
     //   Serial.print("New target color: ");
     //   Serial.println(id_to_color[colorIndex]);
     //   Serial.println("Target cells:");
@@ -490,14 +550,19 @@ void loop() {
     //    Serial.println("Read color has no target cells.");
     // }
 
-  } else if (r.present && !readMode) {
-    String color = handleWrite();
-  //  Serial.println("Color written: " + color);
-  }
+  // } else if (r.present && !readMode) {
+  //   String color = handleWrite();
+  // //  Serial.println("Color written: " + color);
+  // }
 
-  
- 
-  delay(50);
+
+
+
+
+
+
+
+
 
 }
 

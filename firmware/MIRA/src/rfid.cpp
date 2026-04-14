@@ -120,7 +120,7 @@ bool RFID::writeBlock(const int colorIndex) {
 
 
 
-   if (!g_rfid) return false;
+  if (!g_rfid) return false;
   if (colorIndex < 0 || colorIndex > 255) return false;
 
   bool ok = ntagWriteColor(*g_rfid, (uint8_t)colorIndex);
