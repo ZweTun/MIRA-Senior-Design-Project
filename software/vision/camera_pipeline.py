@@ -629,7 +629,8 @@ class CameraPipeline:
             if frame is None:
                 return False, None
             if len(frame.shape) == 3 and frame.shape[2] == 4:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                # frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  
             return True, frame
 
         if self.cap is None:
