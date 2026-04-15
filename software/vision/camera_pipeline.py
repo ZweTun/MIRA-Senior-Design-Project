@@ -54,7 +54,7 @@ RECT_CORNERS = {
 COLOR_TO_BGR = {
     # "red": (0, 0, 255),
     "green": (0, 255, 0),
-    "magenta": (255, 0, 255),
+    # "magenta": (255, 0, 255),
     # "cyan": (255, 255, 0),
     "yellow": (0, 255, 255),
     "blue": (255, 0, 0),
@@ -69,7 +69,7 @@ REFERENCE_HUES = {
     "green": 38,
     "blue": 105,
     # "cyan": 90,
-    "magenta": 145,
+    # "magenta": 145,
     "black": 0,
 }
 
@@ -133,6 +133,7 @@ class CameraPipeline:
         self.stable_n = stable_n
         self.stale_frames = stale_frames
         self.hover_stable_n = max(1, stable_n // 3)
+        self.hover_snap_margin_px = 10
         self.Hmat = None
 
         self.baseline_hsv = {}
@@ -319,7 +320,11 @@ class CameraPipeline:
 
         p = np.array([[[cx, cy]]], dtype=np.float32)
         pr = cv2.perspectiveTransform(p, self.Hmat)[0][0]
-        cell = self.rect_to_cell(float(pr[0]), float(pr[1]))
+        cell = self.rect_to_cell_with_hysteresis(
+            float(pr[0]),
+            float(pr[1]),
+            self.raw_block_candidate,
+        )
 
         
         if cell is None:
@@ -668,6 +673,31 @@ class CameraPipeline:
         if 0 <= row < GRID_ROWS and 0 <= col < GRID_COLS:
             return row, col
         return None
+
+    def rect_to_cell_with_hysteresis(
+        self,
+        xr: float,
+        yr: float,
+        prev_cell: Optional[tuple[int, int]],
+    ) -> Optional[tuple[int, int]]:
+        snapped = self.rect_to_cell(xr, yr)
+        if prev_cell is None:
+            return snapped
+
+        prev_row, prev_col = prev_cell
+        if not (0 <= prev_row < GRID_ROWS and 0 <= prev_col < GRID_COLS):
+            return snapped
+
+        m = float(max(0, self.hover_snap_margin_px))
+        x1 = prev_col * CELL_PX - m
+        x2 = (prev_col + 1) * CELL_PX + m
+        y1 = prev_row * CELL_PX - m
+        y2 = (prev_row + 1) * CELL_PX + m
+
+        # Stick to previous cell until centroid moves clearly into a neighbor.
+        if x1 <= xr < x2 and y1 <= yr < y2:
+            return prev_cell
+        return snapped
 
     def draw_grid(self, img):
         for c in range(1, GRID_COLS):

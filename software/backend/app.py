@@ -42,6 +42,7 @@ current_color = None
 current_mosaic = None
 current_cell_state = None
 current_mosaic_complete = False
+board_rectified = False
 grid = None
 grid_update = False
 
@@ -110,7 +111,7 @@ unconfirm_streak_by_cell = {}
 confirmation_counter = 0
 
 INCORRECT_FRAMES = 30
-CONFIRM_FRAMES = 30   
+CONFIRM_FRAMES = 15
 UNCONFIRM_FRAMES = 7 
 
 def handle_board_logic(color_list, list_of_cells_to_check):
@@ -126,6 +127,7 @@ def handle_board_logic(color_list, list_of_cells_to_check):
 
     new_cell_state = []
     non_empty_target_total = 0
+    empty_cells_have_no_blocks = True
 
     for idx, cell in enumerate(list_of_cells_to_check):
         actual_color = color_list[idx]
@@ -147,6 +149,8 @@ def handle_board_logic(color_list, list_of_cells_to_check):
             confirm_streak_by_cell[cell_key] = 0
             unconfirm_streak_by_cell[cell_key] = 0
             state = "empty" if actual_color in (None, "empty") else "incorrect"
+            if state == "incorrect":
+                empty_cells_have_no_blocks = False
             new_cell_state.append({"x": cell[0], "y": cell[1], "state": state})
             continue
 
@@ -214,7 +218,11 @@ def handle_board_logic(color_list, list_of_cells_to_check):
     # for color_id, cells in current_mosaic.targets_by_color.items():
     #     if color_id != COLOR_TO_ID.get("empty"):
     #         print(f"  {ID_TO_COLOR.get(color_id)}: {len(cells)} cells")
-    current_mosaic_complete = non_empty_target_total > 0 and pending == 0
+    current_mosaic_complete = (
+        non_empty_target_total > 0
+        and pending == 0
+        and empty_cells_have_no_blocks
+    )
 
 def handle_grid_update(camera):
     global grid
@@ -226,6 +234,7 @@ def handle_grid_update(camera):
     global current_raw_position
     global current_color
     global confirmation_counter
+    global board_rectified
     print("Mosaic selection changed, rebuilding mosaic...")
     # Destroy old mosaic to clear targets and free resources
     destroy_mosaic(current_mosaic)
@@ -236,6 +245,7 @@ def handle_grid_update(camera):
     current_position = None
     current_raw_position = None
     current_color = None
+    board_rectified = False
     confirm_streak_by_cell.clear()
     unconfirm_streak_by_cell.clear()
     confirmation_counter = 0
@@ -248,6 +258,7 @@ def main():
     global current_mosaic
     global current_cell_state
     global current_mosaic_complete
+    global board_rectified
     global grid
     global grid_update 
     
@@ -278,6 +289,7 @@ def main():
   
             # print("Cells:", list_of_cells_to_check)
             _, events, should_quit, color_list = camera.step(cells_to_check=(list_of_cells_to_check))
+            board_rectified = camera.Hmat is not None
             current_raw_position = (
                 CellPos(x=camera.raw_block_cell[0], y=camera.raw_block_cell[1])
                 if camera.raw_block_cell is not None
@@ -530,7 +542,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            global current_position, current_raw_position, current_color, current_mosaic, current_cell_state, current_mosaic_complete, grid, confirmation_counter
+            global current_position, current_raw_position, current_color, current_mosaic, current_cell_state, current_mosaic_complete, board_rectified, grid, confirmation_counter
             # print(current_cell_state)
             targets_raw = (
                 current_mosaic.get_target_cells(COLOR_TO_ID[current_color])
@@ -557,6 +569,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 "targets": targets,
                 "cell_state": current_cell_state,
                 "mosaic_complete": current_mosaic_complete,
+                "board_rectified": board_rectified,
                 "grid": grid,
                 "confirmation_counter": confirmation_counter,
             }

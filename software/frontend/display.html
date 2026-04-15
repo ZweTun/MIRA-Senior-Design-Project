@@ -32,7 +32,7 @@
 			--target-fill:    rgba(155,92,255,0.16);
 			--target-ring:    #d6c2ff;
 
-			--empty-border:   rgba(255,255,255,0.08);
+			--empty-border:   rgba(255, 255, 255, 0.08);
 
 			--focus-ring: rgba(250,204,21,0.7);
 		}
@@ -125,14 +125,90 @@
 			border: 1px solid rgba(255,255,255,0.07);
 			border-radius: 12px;
 			padding: 20px;
-			display: flex;
-			justify-content: center;
+			display: block;
 			overflow: auto;
+		}
+
+		.display-layout {
+			display: flex;
+			align-items: flex-start;
+			justify-content: center;
+			gap: 18px;
+			width: 100%;
+		}
+
+		.side-column {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
 		}
 
 		#gridContainer {
 			display: inline-grid;
 			gap: 3px;
+		}
+
+		.side-tile {
+			width: 210px;
+			background: #151a22;
+			border: 1px solid rgba(255,255,255,0.14);
+			border-radius: 10px;
+			padding: 14px 12px;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.held-panel {
+			min-height: 220px;
+			align-items: center;
+			justify-content: flex-start;
+			gap: 10px;
+		}
+
+		.legend-panel {
+			gap: 8px;
+		}
+
+		.held-label {
+			margin: 0;
+			font-size: 26px;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: #ffffff;
+		}
+
+		.held-swatch {
+			width: 76px;
+			height: 76px;
+			border-radius: 16px;
+			border: 2px solid #ffffff;
+			background: #2a2d38;
+			box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+		}
+
+		.held-value {
+			margin: 0;
+			font-size: 22px;
+			line-height: 1.15;
+			font-weight: 700;
+			color: #f3f6ff;
+			text-align: center;
+		}
+
+		.held-note {
+			margin: 0;
+			font-size: 13px;
+			line-height: 1.35;
+			text-align: center;
+			color: #c9d0df;
+		}
+
+		.legend-title {
+			margin: 0;
+			font-size: 25px;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: white
 		}
 
 		.grid-row {
@@ -141,8 +217,8 @@
 
 		/* ── Cell base ── */
 		.grid-cell {
-			width: clamp(38px, 5.5vw, 58px);
-			height: clamp(38px, 5.5vw, 58px);
+			width: clamp(48px, 5.5vw, 68px);
+			height: clamp(48px, 5.5vw, 68px);
 			border: 2px solid var(--empty-border);
 			border-radius: 4px;
 			position: relative;
@@ -218,20 +294,24 @@
 
 		/* ── Legend ── */
 		.legend {
-			width: min(900px, 100%);
+			width: 100%;
 			display: flex;
-			flex-wrap: wrap;
-			gap: 8px 20px;
-			justify-content: center;
+			flex-direction: column;
+			gap: 8px;
+			justify-content: flex-start;
+			align-items: flex-start;
+			margin-top: 0;
+			color: white;
 		}
 
 		.legend-item {
 			display: flex;
 			align-items: center;
 			gap: 7px;
-			font-size: 13px;
+			font-size: 20px;
 			color: var(--text-sub);
 			letter-spacing: 0.01em;
+			color: white;
 		}
 
 		.legend-swatch {
@@ -267,8 +347,8 @@
 			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='12' cy='12' r='6' stroke='%23d6c2ff' stroke-width='2.2'/%3E%3C/svg%3E");
 		}
 		.legend-empty {
-			border-color: rgba(255,255,255,0.15);
-			opacity: 0.4;
+			border-color: white;
+			opacity: 1;
 		}
 
 		/* ── Complete banner ── */
@@ -291,6 +371,25 @@
 			from { opacity: 0; transform: translateY(6px); }
 			to   { opacity: 1; transform: translateY(0); }
 		}
+
+		@media (max-width: 860px) {
+			.display-layout {
+				flex-direction: column;
+				align-items: center;
+			}
+
+			.side-column {
+				width: min(100%, 360px);
+			}
+
+			.side-tile {
+				width: min(100%, 360px);
+			}
+
+			.held-panel {
+				min-height: auto;
+			}
+		}
 	</style>
 </head>
 <body>
@@ -305,48 +404,60 @@
 
 	<h1 class="headline">MIRA</h1>
 
+
+	<section class="display-panel" aria-label="Mosaic grid and held block status">
+		<div class="display-layout">
+			<div id="gridContainer" role="grid" aria-label="8 by 8 mosaic grid"></div>
+			<div class="side-column" aria-label="Right side info panels">
+				<aside class="side-tile held-panel" aria-label="Held block indicator">
+					<p class="held-label">Held Block</p>
+					<div class="held-swatch" id="heldSwatch" aria-hidden="true"></div>
+					<p class="held-value" id="heldText" aria-live="polite">No block</p>
+					<p class="held-note" id="heldNote">Waiting for detection...</p>
+				</aside>
+
+				<aside class="side-tile legend-panel" aria-label="Cell state legend panel">
+					<p class="legend-title">Legend</p>
+					<nav class="legend" aria-label="Cell state legend">
+						<div class="legend-item">
+							<div class="legend-swatch legend-correct" aria-hidden="true"></div>
+							<span> Correct</span>
+						</div>
+						<div class="legend-item">
+							<div class="legend-swatch legend-incorrect" aria-hidden="true"></div>
+							<span> Incorrect</span>
+						</div>
+						<div class="legend-item">
+							<div class="legend-swatch legend-target" aria-hidden="true"></div>
+							<span>Targets</span>
+						</div>
+						<div class="legend-item">
+							<div class="legend-swatch legend-empty" aria-hidden="true"></div>
+							<span>Empty</span>
+						</div>
+					</nav>
+				</aside>
+			</div>
+		</div>
+	</section>
+
 	<div class="status-bar" role="status" aria-live="polite">
 		<div class="status-dot" id="statusDot" aria-hidden="true"></div>
 		<p id="statusText">Waiting for mosaic selection...</p>
 	</div>
 
-	<section class="display-panel" aria-label="Mosaic grid">
-		<div id="gridContainer" role="grid" aria-label="8 by 8 mosaic grid"></div>
-	</section>
-
 	<div class="complete-banner" id="completeBanner" role="alert" aria-live="assertive">
 		✓ Mosaic complete!
 	</div>
-
-	<!-- Legend — icons + text, no color-only labels -->
-	<nav class="legend" aria-label="Cell state legend">
-		<div class="legend-item">
-			<div class="legend-swatch legend-correct" aria-hidden="true"></div>
-			<span>Correct placement</span>
-		</div>
-		<div class="legend-item">
-			<div class="legend-swatch legend-incorrect" aria-hidden="true"></div>
-			<span>Wrong placement</span>
-		</div>
-		<!-- <div class="legend-item">
-			<div class="legend-swatch legend-unknown" aria-hidden="true"></div>
-			<span>Undetected</span>
-		</div> -->
-		<div class="legend-item">
-			<div class="legend-swatch legend-target" aria-hidden="true"></div>
-			<span>Target cell</span>
-		</div>
-		<div class="legend-item">
-			<div class="legend-swatch legend-empty" aria-hidden="true"></div>
-			<span>Empty</span>
-		</div>
-	</nav>
 
 	<script>
 		const backButton   = document.getElementById("backButton");
 		const statusText   = document.getElementById("statusText");
 		const statusDot    = document.getElementById("statusDot");
 		const gridContainer= document.getElementById("gridContainer");
+		const heldSwatch   = document.getElementById("heldSwatch");
+		const heldText     = document.getElementById("heldText");
+		const heldNote     = document.getElementById("heldNote");
 		const completeBanner = document.getElementById("completeBanner");
 
 		let currentGrid = null;
@@ -361,6 +472,7 @@
 		let pendingBellCount = 0;
 		let pendingHoverChimeCount = 0;
 		let pendingFanfare = false;
+		let lastSpokenHeldState = "";
 
 		function ensureAudioContext() {
 			if (!audioContext) {
@@ -500,6 +612,12 @@
 		}
 
 		function checkHoverChime(data) {
+			if (data.board_rectified !== true) {
+				lastHoverKey = null;
+				nextHoverBeepAtMs = 0;
+				return;
+			}
+
 			const pos = data.raw_position;
 			if (!pos || !Array.isArray(data.targets) || !data.current_color) {
 				lastHoverKey = null;
@@ -546,6 +664,45 @@
 			};
 			if (!name || typeof name !== "string") return "#2a2d38";
 			return map[name.toLowerCase()] || name;
+		}
+
+		function speakHeldState(phrase) {
+			if (!("speechSynthesis" in window)) return;
+			if (!phrase || phrase === lastSpokenHeldState) return;
+			lastSpokenHeldState = phrase;
+			window.speechSynthesis.cancel();
+			const utterance = new SpeechSynthesisUtterance(phrase);
+			utterance.rate = 1.0;
+			utterance.pitch = 1.0;
+			utterance.volume = 1.0;
+			window.speechSynthesis.speak(utterance);
+		}
+
+		function updateHeldIndicator(data) {
+			if (data.board_rectified !== true) {
+				heldSwatch.style.backgroundColor = "#2a2d38";
+				heldSwatch.style.borderColor = "#ffffff";
+				heldText.textContent = "No block";
+				// heldNote.textContent = "Waiting for board rectification.";
+				return;
+			}
+
+			const hasBlock = Boolean(data.current_color) && Boolean(data.current_position);
+			if (!hasBlock) {
+				heldSwatch.style.backgroundColor = "#2a2d38";
+				heldSwatch.style.borderColor = "#ffffff";
+				heldText.textContent = "No block";
+				heldNote.textContent = "Pick up a block.";
+				// speakHeldState("no block");
+				return;
+			}
+
+			const colorName = String(data.current_color).toLowerCase();
+			heldSwatch.style.backgroundColor = normalizeColor(colorName);
+			heldSwatch.style.borderColor = "#ffffff";
+			heldText.textContent = `${colorName}`;
+			heldNote.textContent = "Currently tracked held color.";
+			speakHeldState(`${colorName} block`);
 		}
 
 		function setStatus(msg, state = "normal") {
@@ -632,9 +789,20 @@
 			}
 
 			if (!currentGrid) {
+				updateHeldIndicator(data);
 				setStatus("Waiting for mosaic selection...");
 				return;
 			}
+
+			if (data.board_rectified !== true) {
+				updateHeldIndicator(data);
+				resetCellStyles();
+				completeBanner.classList.remove("visible");
+				setStatus("Waiting for board rectification (show all 4 corner tags).", "error");
+				return;
+			}
+
+			updateHeldIndicator(data);
 
 			resetCellStyles();
 			applyCellState(data.cell_state);
