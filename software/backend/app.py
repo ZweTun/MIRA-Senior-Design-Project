@@ -33,6 +33,7 @@ SERIAL_BAUD = 115200
 USE_PICAMERA2 = True
 CAMERA_INDEX = 1
 PICAMERA_SIZE = (1296, 972)
+PICAMERA_FRAME_ORDER = "rgb"
 
 ser = None
 my_name = ""
@@ -272,6 +273,7 @@ def main():
         camera_index=CAMERA_INDEX,
         use_picamera2=USE_PICAMERA2,
         picamera_size=PICAMERA_SIZE,
+        picamera_frame_order=PICAMERA_FRAME_ORDER,
     )
     all_cells = []
     for row in range(GRID_ROWS):

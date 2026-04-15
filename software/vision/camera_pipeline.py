@@ -93,10 +93,12 @@ class CameraPipeline:
         stale_frames: int = 15,
         use_picamera2: bool = False,
         picamera_size: tuple[int, int] = (1280, 720),
+        picamera_frame_order: str = "rgb",
     ):
         self.cap = None
         self.picam2 = None
         self.use_picamera2 = False
+        self.picamera_frame_order = picamera_frame_order.lower()
 
         if use_picamera2:
             if Picamera2 is None:
@@ -105,7 +107,7 @@ class CameraPipeline:
                 try:
                     self.picam2 = Picamera2()
                     config = self.picam2.create_preview_configuration(
-                        main={"format": "BGB888", "size": picamera_size}
+                        main={"format": "BGR888", "size": picamera_size}
                     )
                     self.picam2.configure(config)
                     self.picam2.start()
@@ -628,8 +630,12 @@ class CameraPipeline:
                 return False, None
             if frame is None:
                 return False, None
-            
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            if self.picamera_frame_order == "rgb":
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            elif self.picamera_frame_order == "bgr":
+                pass
+            else:
+                print(f"Unknown picamera_frame_order={self.picamera_frame_order!r}; assuming BGR.")
             return True, frame
 
         if self.cap is None:
