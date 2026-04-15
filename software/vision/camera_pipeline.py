@@ -145,7 +145,7 @@ class CameraPipeline:
         self.block_hsv_upper = None
         self.last_frame = None
 
-        self.sample_interval = 60  # resample every 60 frames (reduced from 30 for performance)
+        self.sample_interval = 30  # resample every 30 frames
         self.last_sample_frame = -999
         self.roi_h = 120
         self.roi_w = 130
@@ -389,26 +389,19 @@ class CameraPipeline:
 
         _, labels, centers = cv2.kmeans(
             valid, k, None,
-            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 5, 1.0),
+            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0),
             3, cv2.KMEANS_RANDOM_CENTERS
         )
 
-        # Compute optical flow only on ROI bounding box instead of full frame for speed
-        y_coords = poly_i[:, 1]
-        x_coords = poly_i[:, 0]
-        y_min, y_max = int(np.clip(y_coords.min() - 5, 0, frame.shape[0] - 2)), int(np.clip(y_coords.max() + 5, 1, frame.shape[0] - 1))
-        x_min, x_max = int(np.clip(x_coords.min() - 5, 0, frame.shape[1] - 2)), int(np.clip(x_coords.max() + 5, 1, frame.shape[1] - 1))
-        
-        prev_gray_roi = cv2.cvtColor(self.last_frame[y_min:y_max, x_min:x_max], cv2.COLOR_BGR2GRAY)
-        curr_gray_roi = cv2.cvtColor(frame[y_min:y_max, x_min:x_max], cv2.COLOR_BGR2GRAY)
+        # Compute optical flow in ROI to find moving pixels
+        prev_gray = cv2.cvtColor(self.last_frame, cv2.COLOR_BGR2GRAY)
+        curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         flow = cv2.calcOpticalFlowFarneback(
-            prev_gray_roi, curr_gray_roi, None,
+            prev_gray, curr_gray, None,
             0.5, 3, 15, 3, 5, 1.2, 0
         )
         flow_mag = np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)  # motion magnitude per pixel
-        # Map ROI motion back to full frame (only extract motion within the actual ROI mask)
-        roi_motion_roi = flow_mag[roi_mask[y_min:y_max, x_min:x_max] > 0]
-        roi_motion = roi_motion_roi if roi_motion_roi.size > 0 else np.array([])
+        roi_motion = flow_mag[roi_mask > 0]
         motion_floor = float(np.percentile(roi_motion, 70)) if roi_motion.size > 0 else 0.0
         dynamic_score_threshold = motion_floor * np.log1p(max(dynamic_min_cluster_pixels, 1)) * 0.35
         # between 5 and 12.0 based on observed scores; adjust as needed
