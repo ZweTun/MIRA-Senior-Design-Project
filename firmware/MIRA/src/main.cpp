@@ -187,6 +187,7 @@ void guideToTarget(const FeedbackPacket& feedbackPacket) {
     // Serial.print(", ");
     // Serial.print(feedbackPacket.currentPos.col);
     // Serial.print(") ");
+    // Hardcoded for now, will replace with actual distance calculation later
     giveFeedback(feedbackPacket.magnitude, feedbackPacket.state);
 
 
@@ -483,8 +484,10 @@ void loop() {
 
   // Do not drive haptics/motor until the first valid model update arrives.
   if (!hasFirstModelUpdate) {
+    Serial.println("Waiting for first model update...");
     return;
   }
+  //giveFeedback(currFeedback.magnitude, 2);
   guideToTarget(currFeedback);
 
   // if (newFeedback) {

@@ -1,10 +1,11 @@
 from unicodedata import name
 import yaml
+from pathlib import Path
 from planner.models import CellPos, GuidanceState
 from planner.mosaic import Mosaic
 from planner.planner import calculate_vector, make_feedback_from_diff
 from transport.transport import debug_send, send_serial_packet
-from vision.camera_pipeline import GRID_COLS, GRID_ROWS, CameraPipeline
+from vision.camera_pipeline import GRID_COLS, GRID_ROWS, CameraPipeline, WRIST_TAG_CONFIGS
 import serial
 
 
@@ -19,6 +20,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from planner.mosaic import COLOR_TO_ID, ID_TO_COLOR, TAG_TO_COLOR_ID
 
 # Plug in 
@@ -27,10 +29,10 @@ from planner.mosaic import COLOR_TO_ID, ID_TO_COLOR, TAG_TO_COLOR_ID
 # Run 
 
 # DONT FORGET to ENABLE
-SERIAL_ENABLE = False
+SERIAL_ENABLE = True
 SERIAL_PORT = "COM11"
 SERIAL_BAUD = 115200
-USE_PICAMERA2 = True
+USE_PICAMERA2 = False
 CAMERA_INDEX = 1
 PICAMERA_SIZE = (1296, 972)
 PICAMERA_FRAME_ORDER = "rgb"
@@ -99,116 +101,189 @@ LIBRARY_MOSAICS = [
     {"endpoint": "mosaic2", "name": "boat", "path": "backend/yaml_assets/boat.yaml"},
     {"endpoint": "mosaic3", "name": "moon", "path": "backend/yaml_assets/moon.yaml"},
     {"endpoint": "mosaic4", "name": "smiley", "path": "backend/yaml_assets/smiley.yaml"},
+    {"endpoint": "mosaic5", "name": "sad", "path": "backend/yaml_assets/sad.yaml"},
 ]
 
-USER_TAG = 4
+
+def build_empty_grid(rows=GRID_ROWS, cols=GRID_COLS):
+    return [["empty" for _ in range(cols)] for _ in range(rows)]
+
+WRIST_TAGS = set(WRIST_TAG_CONFIGS)
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
 
 
 current_mosaic_complete = False
 grid_update = False  # reset flag after initial load
-current_cell_state = []  # list of dicts with keys x, y, state (empty, unknown, correct, incorrect)
+current_cell_state = []  # list of dicts with keys x, y, state (empty, unknown, current, correct, incorrect)
 confirm_streak_by_cell = {}
-unconfirm_streak_by_cell = {}
+incorrect_streak_by_cell = {}
 confirmation_counter = 0
+current_blocks_onboard = 0
+total_non_empty_expected = 0
 
-INCORRECT_FRAMES = 30
-CONFIRM_FRAMES = 15
-UNCONFIRM_FRAMES = 7 
+INCORRECT_FRAMES = 20
+CURRENT_FRAMES = 10
+CONFIRM_FRAMES = 10
+HOLD_CONFIRM_BUFFER_RADIUS = 1  # 3x3 area centered on held cell
 
 def handle_board_logic(color_list, list_of_cells_to_check):
     global grid, current_mosaic, current_cell_state
     global current_mosaic_complete
     global current_raw_position
-    global confirm_streak_by_cell, unconfirm_streak_by_cell
+    global confirm_streak_by_cell, incorrect_streak_by_cell
     global confirmation_counter
+    global current_blocks_onboard
+    global total_non_empty_expected
 
     if color_list is None or len(color_list) != len(list_of_cells_to_check):
+        current_blocks_onboard = 0
+        total_non_empty_expected = 0
         current_mosaic_complete = False
         return
 
     new_cell_state = []
     non_empty_target_total = 0
     empty_cells_have_no_blocks = True
+    blocks_onboard = 0
 
-    for idx, cell in enumerate(list_of_cells_to_check):
+    def add_state(row, col, state):
+        new_cell_state.append({"x": row, "y": col, "state": state})
+
+    def bump(counter, key):
+        counter[key] = counter.get(key, 0) + 1
+        return counter[key]
+
+    def is_empty_reading(color):
+        return color in (None, "empty")
+
+    for idx, (row, col) in enumerate(list_of_cells_to_check):
         actual_color = color_list[idx]
-        expected_color = grid[cell[0]][cell[1]]
-        cell_key = (cell[0], cell[1])
-        cell_pos = CellPos(x=cell[0], y=cell[1])
+        expected_color = grid[row][col]
+        cell_key = (row, col)
+        cell_pos = CellPos(x=row, y=col)
         is_target_cell = expected_color not in (None, "empty")
+
+        # Count currently visible onboard blocks irrespective of correctness.
+        if actual_color not in (None, "empty", "unknown"):
+            blocks_onboard += 1
 
         if is_target_cell:
             non_empty_target_total += 1
 
-        # Unknown 
+        # Ignore unknown readings entirely for board-logic decisions.
+        # Do not compare to expected color and do not update any streak counters.
         if actual_color == "unknown":
-            new_cell_state.append({"x": cell[0], "y": cell[1], "state": "unknown"})
+            if is_target_cell:
+                expected_color_id = COLOR_TO_ID[expected_color]
+                is_pending = cell_pos in current_mosaic.get_target_cells(expected_color_id)
+                add_state(row, col, "correct" if not is_pending else "unknown")
+            else:
+                add_state(row, col, "empty")
             continue
 
-        # Non-target cell
         if not is_target_cell:
             confirm_streak_by_cell[cell_key] = 0
-            unconfirm_streak_by_cell[cell_key] = 0
-            state = "empty" if actual_color in (None, "empty") else "incorrect"
+
+            if is_empty_reading(actual_color):
+                incorrect_streak_by_cell[cell_key] = 0
+                state = "empty"
+            else:
+                wrong_frames = bump(incorrect_streak_by_cell, cell_key)
+                if wrong_frames >= INCORRECT_FRAMES:
+                    state = "incorrect"
+                elif wrong_frames >= CURRENT_FRAMES:
+                    # Stable non-empty presence, but not long enough to mark as incorrect.
+                    state = "current"
+                else:
+                    # Short detections are treated as unknown to avoid hand-motion false flashes.
+                    state = "unknown"
+
             if state == "incorrect":
                 empty_cells_have_no_blocks = False
-            new_cell_state.append({"x": cell[0], "y": cell[1], "state": state})
+            add_state(row, col, state)
             continue
 
         expected_color_id = COLOR_TO_ID[expected_color]
         is_pending = cell_pos in current_mosaic.get_target_cells(expected_color_id)
         is_cell_currently_held = (
             current_raw_position is not None
-            and current_raw_position.x == cell[0]
-            and current_raw_position.y == cell[1]
+            and current_raw_position.x == row
+            and current_raw_position.y == col
+        )
+        in_hold_confirm_buffer = (
+            current_raw_position is not None
+            and abs(current_raw_position.x - row) <= HOLD_CONFIRM_BUFFER_RADIUS
+            and abs(current_raw_position.y - col) <= HOLD_CONFIRM_BUFFER_RADIUS
         )
 
-
         if actual_color == expected_color:
+            incorrect_streak_by_cell[cell_key] = 0
+            if is_pending and in_hold_confirm_buffer:
+                # Block confirmations in a 3x3 neighborhood around the held cell.
+                confirm_streak_by_cell[cell_key] = 0
+                add_state(row, col, "unknown")
+                continue
+
             if is_cell_currently_held:
                 # Do not confirm while the block is still actively being hovered/held on this cell.
                 confirm_streak_by_cell[cell_key] = 0
-                unconfirm_streak_by_cell[cell_key] = 0
-                new_cell_state.append({"x": cell[0], "y": cell[1], "state": "correct"})
+                add_state(row, col, "correct" if not is_pending else "unknown")
                 continue
 
-            confirm_streak_by_cell[cell_key] = confirm_streak_by_cell.get(cell_key, 0) + 1
-            unconfirm_streak_by_cell[cell_key] = 0
+            confirm_frames = bump(confirm_streak_by_cell, cell_key)
 
-            if is_pending and confirm_streak_by_cell[cell_key] >= CONFIRM_FRAMES:
-                # print(f"Confirmed ({cell[0]},{cell[1]}) → {expected_color}")
+            if is_pending and confirm_frames >= CONFIRM_FRAMES:
                 current_mosaic.remove_cell_from_color(expected_color_id, cell_pos)
                 confirmation_counter += 1
+                add_state(row, col, "correct")
+                continue
 
-            new_cell_state.append({"x": cell[0], "y": cell[1], "state": "correct"})
+            if is_pending and confirm_frames >= CURRENT_FRAMES:
+                # Pending correct placement seen long enough to be considered current.
+                add_state(row, col, "current")
+                continue
+
+            add_state(row, col, "correct" if not is_pending else "unknown")
             continue
 
-        # Empty/black seen 
-        # Both cases treated the same 
+        # Empty/black seen; both cases treated the same for confirm streak reset.
         confirm_streak_by_cell[cell_key] = 0
 
-        if actual_color in (None, "empty"):
-            # Board surface visible — definitive absence
-            unconfirm_streak_by_cell[cell_key] = unconfirm_streak_by_cell.get(cell_key, 0) + 1
-
-            if (not is_pending) and unconfirm_streak_by_cell[cell_key] >= UNCONFIRM_FRAMES:
-                # print(f"Block removed from ({cell[0]},{cell[1]}), re-adding target")
+        if is_empty_reading(actual_color):
+            incorrect_streak_by_cell[cell_key] = 0
+            # Board surface visible — definitive absence.
+            if not is_pending:
                 current_mosaic.add_cell_to_color(expected_color_id, cell_pos)
-                unconfirm_streak_by_cell[cell_key] = 0
 
-            new_cell_state.append({"x": cell[0], "y": cell[1], "state": "empty"})
-        else:
-            # Wrong color on surface — incorrect placement
-            # Wait for n frames before adding back to targets to avoid flickering 
-            unconfirm_streak_by_cell[cell_key] = unconfirm_streak_by_cell.get(cell_key, 0) + 1
+            add_state(row, col, "empty")
+            continue
 
-            if (not is_pending) and unconfirm_streak_by_cell[cell_key] >= 150:  # longer threshold for new incorrect 
-                current_mosaic.add_cell_to_color(expected_color_id, cell_pos)
-                # print(f"Incorrect block at ({cell[0]},{cell[1]}), expected {expected_color} but saw {actual_color} adding back to targets")
-                unconfirm_streak_by_cell[cell_key] = 0
-            new_cell_state.append({"x": cell[0], "y": cell[1], "state": "incorrect"})
+        # Wrong color on surface.
+        if not is_pending:
+            # Once confirmed, ignore non-empty detections (e.g., hands/occlusions).
+            # Only an empty board reading should re-add this target.
+            incorrect_streak_by_cell[cell_key] = 0
+            add_state(row, col, "correct")
+            continue
+
+        if is_cell_currently_held:
+            incorrect_streak_by_cell[cell_key] = 0
+            add_state(row, col, "unknown")
+            continue
+
+        incorrect_frames = bump(incorrect_streak_by_cell, cell_key)
+        if incorrect_frames < INCORRECT_FRAMES:
+            # For already-confirmed cells, keep visual correctness until incorrect is confirmed.
+            add_state(row, col, "correct" if not is_pending else "unknown")
+            continue
+
+        # Confirmed incorrect after INCORRECT_FRAMES to avoid hand-motion false positives.
+        add_state(row, col, "incorrect")
 
     current_cell_state = new_cell_state
+    current_blocks_onboard = blocks_onboard
+    total_non_empty_expected = non_empty_target_total
     pending = sum(
         len(cells)
         for color_id, cells in current_mosaic.targets_by_color.items()
@@ -236,6 +311,9 @@ def handle_grid_update(camera):
     global current_color
     global confirmation_counter
     global board_rectified
+    global incorrect_streak_by_cell
+    global current_blocks_onboard
+    global total_non_empty_expected
     print("Mosaic selection changed, rebuilding mosaic...")
     # Destroy old mosaic to clear targets and free resources
     destroy_mosaic(current_mosaic)
@@ -248,8 +326,10 @@ def handle_grid_update(camera):
     current_color = None
     board_rectified = False
     confirm_streak_by_cell.clear()
-    unconfirm_streak_by_cell.clear()
+    incorrect_streak_by_cell.clear()
     confirmation_counter = 0
+    current_blocks_onboard = 0
+    total_non_empty_expected = 0
     grid_update = False
 
 def main():
@@ -262,6 +342,7 @@ def main():
     global board_rectified
     global grid
     global grid_update 
+    global current_blocks_onboard
     
     while not grid_update:
         print("Waiting for initial mosaic selection...")
@@ -304,8 +385,9 @@ def main():
 
             for event in events:
                 # print(f"EVENT: tag={event.tag_id}, kind={event.kind}, row={event.row}, col={event.col}")
+                block_still_held = current_raw_position is not None
                 if event.kind == "offboard":
-                    if event.tag_id in ID_TO_COLOR:
+                    if not block_still_held and event.tag_id in ID_TO_COLOR:
                         current_color = ID_TO_COLOR[event.tag_id]
                         current_position = CellPos(x=-1, y=-1)
                     # Send stop/neutral command while still keeping targets highlighted in UI.
@@ -315,9 +397,10 @@ def main():
                     continue
                 
                 if event.kind not in ("onboard", "placed"):
-                    # Clear displayed guidance when the tracked tile is removed/offboard.
-                    current_position = None
-                    current_color = None
+                    # Only clear displayed guidance when the held block is truly gone.
+                    if not block_still_held:
+                        current_position = None
+                        current_color = None
                     # Send stop signal to esp for any non-placement event
                     # print(f"Non-placement event detected, sending stop signal. Event kind: {event.kind}")
                     packet = make_feedback_from_diff(None, CellPos(x=event.row, y=event.col))
@@ -325,7 +408,7 @@ def main():
                         send_serial_packet(ser, packet)
                     continue
             
-                if (event.tag_id == USER_TAG):
+                if event.tag_id in WRIST_TAGS:
                    
                     packet = make_feedback_from_diff(None, CellPos(x=event.row, y=event.col))
                     if ser:
@@ -381,10 +464,10 @@ def main():
                 break
             
             # ESP DEBUG
-            # if ser and ser.in_waiting > 0:
-            #     line = ser.readline().decode(errors="ignore").strip()
-            #     if line:
-            #         print("RX:", line)
+            if ser and ser.in_waiting > 0:
+                line = ser.readline().decode(errors="ignore").strip()
+                if line:
+                    print("RX:", line)
 
             # if my_name:
             #     print(f"Current mosaic: {my_name}", flush=True)
@@ -505,6 +588,33 @@ def set_mosaic4(req: NameRequest):
     return {"message": f"Selected Mosaic: {req.name}!",
             "grid": grid}
 
+@app.post("/mosaic5")
+def set_mosaic5(req: NameRequest):
+    global my_name
+    global grid
+    global grid_update
+    my_name = req.name
+    print(f"Setting mosaic5 for user: {req.name}")
+    grid = load_mosaic_yaml("backend/yaml_assets/sad.yaml")
+    grid_update = True
+    return {"message": f"Selected Mosaic: {req.name}!",
+            "grid": grid}
+
+
+@app.post("/mosaic_empty")
+def set_mosaic_empty(req: NameRequest):
+    global my_name
+    global grid
+    global grid_update
+    my_name = req.name
+    print(f"Setting empty mosaic for user: {req.name}")
+    grid = build_empty_grid()
+    grid_update = True
+    return {
+        "message": f"Selected Mosaic: {req.name}!",
+        "grid": grid,
+    }
+
 
 @app.get("/mosaic_library")
 def get_mosaic_library():
@@ -519,32 +629,13 @@ def get_mosaic_library():
         )
     return {"mosaics": mosaics}
 
-# Send current block position to web client for visualization
-# @app.get("/current_position")
-# def get_current_position():
-#     # This is a placeholder. You would replace this with the actual current position from your camera pipeline.
-#     global current_position
-#     global current_color
-#     global current_mosaic
-#     # targets = current_mosaic.get_target_cells(COLOR_TO_ID[current_color]) if current_color else None
-#     # Hard coded cyan
-#     # targets = current_mosaic.get_target_cells("cyan") if current_mosaic else None
-#     targets = current_mosaic.get_target_cells(COLOR_TO_ID[current_color]) if current_mosaic and current_color else None
-#     if current_position is None:
-#         return {"current_position": None,
-#                 "current_color": None,
-#                 "targets": None}
-#     return {"current_position": {"x": current_position.x, "y": current_position.y},
-#             "current_color": current_color,
-#             "targets": targets}
-
 # Websocket endpoint to stream current position and targets to web client at 10 Hz for real-time visualization
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            global current_position, current_raw_position, current_color, current_mosaic, current_cell_state, current_mosaic_complete, board_rectified, grid, confirmation_counter
+            global current_position, current_raw_position, current_color, current_mosaic, current_cell_state, current_mosaic_complete, board_rectified, grid, confirmation_counter, current_blocks_onboard, total_non_empty_expected
             # print(current_cell_state)
             targets_raw = (
                 current_mosaic.get_target_cells(COLOR_TO_ID[current_color])
@@ -574,11 +665,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 "board_rectified": board_rectified,
                 "grid": grid,
                 "confirmation_counter": confirmation_counter,
+                "current_blocks_onboard": current_blocks_onboard,
+                "total_non_empty_expected": total_non_empty_expected,
             }
 
             await websocket.send_text(json.dumps(payload))
             # 30 hz update rate for smooth visualization without overwhelming the client or network
-            await asyncio.sleep(0.033)  # approximately 
+            await asyncio.sleep(0.033)  # approximately 30 Hz
     except WebSocketDisconnect:
         print("Client disconnected")
 
@@ -592,6 +685,9 @@ def status():
 
 @app.get("/", response_class=HTMLResponse)
 def homepage():
-    with open("index.html") as f:
+    with open(FRONTEND_DIR / "index.html", encoding="utf-8") as f:
         return f.read()
+
+
+app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
     

@@ -18,6 +18,7 @@ COLOR_TO_ID = {
     "orange": 15,
     "empty": 255
 
+
 }
 
 TAG_TO_COLOR_ID = {

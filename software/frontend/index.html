@@ -56,7 +56,7 @@
       width: min(1220px, 100%);
       margin-top: 40px;
       display: grid;
-      grid-template-columns: repeat(3, minmax(250px, 1fr));
+        grid-template-columns: repeat(4, minmax(220px, 1fr));
       gap: 42px;
       justify-content: center;
       align-items: stretch;
@@ -85,6 +85,41 @@
       outline: none;
     }
 
+    .button-tile.locked,
+    .button-tile:disabled {
+      cursor: not-allowed;
+      opacity: 0.78;
+      transform: none;
+      box-shadow: none;
+      border-color: rgba(255, 255, 255, 0.2);
+      background:
+        repeating-linear-gradient(
+          -45deg,
+          rgba(255, 255, 255, 0.04),
+          rgba(255, 255, 255, 0.04) 10px,
+          rgba(255, 255, 255, 0.01) 10px,
+          rgba(255, 255, 255, 0.01) 20px
+        ),
+        var(--card-bg);
+    }
+
+    .button-tile.locked:hover,
+    .button-tile.locked:focus-visible,
+    .button-tile:disabled:hover,
+    .button-tile:disabled:focus-visible {
+      transform: none;
+      box-shadow: none;
+      outline: none;
+    }
+
+    .card-kicker {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-sub);
+    }
+
     .card-title {
       margin-top: 18px;
       margin-bottom: 0;
@@ -104,12 +139,30 @@
     }
 
     .image-preview {
-      margin-top: 22px;
+      margin-top: auto;
       width: min(100%, 306px);
       aspect-ratio: 1 / 1;
       object-fit: cover;
       border: 1px solid var(--preview-line);
       display: block;
+    }
+
+    .button-tile.locked .image-preview {
+      filter: grayscale(1) contrast(0.85) brightness(0.72);
+    }
+
+    .coming-soon-art {
+      margin-top: auto;
+      width: min(100%, 306px);
+      aspect-ratio: 1 / 1;
+      border: 1px solid var(--preview-line);
+      display: grid;
+      place-items: center;
+      font-family: 'Syne', sans-serif;
+      font-size: 34px;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.75);
+      background: rgba(255, 255, 255, 0.03);
     }
 
     #gridContainer {
@@ -156,6 +209,7 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="assets/mira-theme.css" />
 </head>
 <body>
   <h1 class="headline">MIRA</h1>
@@ -168,16 +222,24 @@
 
     </button>
 
-    <button class="button-tile" id="buttonTwo" type="button" aria-label="Create new mosaic">
+    <button class="button-tile locked" id="buttonTwo" type="button" aria-label="Create new mosaic coming soon" disabled aria-disabled="true">
+      <p class="card-kicker">Coming soon</p>
       <h2 class="card-title">Create New Mosaic</h2>
-      <p class="card-subtitle">Start with a blank grid</p>
-      <img class="image-preview" src="assets/moon.png" alt="Preview of blank mosaic" aria-hidden="true" />
+      <!-- <p class="card-subtitle">Locked for now</p> -->
+      <div class="coming-soon-art" aria-hidden="true">Soon</div>
     </button>
 
-    <button class="button-tile" id="buttonThree" type="button" aria-label="My mosaics">
+    <button class="button-tile locked" id="buttonThree" type="button" aria-label="My mosaics coming soon" disabled aria-disabled="true">
+      <p class="card-kicker">Coming soon</p>
       <h2 class="card-title">My Mosaics</h2>
-      <p class="card-subtitle">Open your saved designs</p>
-      <img class="image-preview" src="assets/flower.png" alt="Preview of saved mosaic" aria-hidden="true" />
+      <!-- <p class="card-subtitle">Locked for now</p> -->
+      <div class="coming-soon-art" aria-hidden="true">Soon</div>
+    </button>
+
+    <button class="button-tile" id="buttonFour" type="button" aria-label="Games">
+      <h2 class="card-title">Games</h2>
+      <p class="card-subtitle">Play mosaic challenges</p>
+      <img class="image-preview" src="assets/moon.png" alt="Preview of game mode" aria-hidden="true" />
     </button>
   </section>
 
@@ -193,6 +255,7 @@
     const buttonOne = document.getElementById("buttonOne");
     const buttonTwo = document.getElementById("buttonTwo");
     const buttonThree = document.getElementById("buttonThree");
+    const buttonFour = document.getElementById("buttonFour");
     // const nameInput = document.getElementById("nameInput");
     const responseText = document.getElementById("responseText");
     const positionText = document.getElementById("positionText");
@@ -275,7 +338,7 @@
             
             // grid_cell.style.opacity = "0.5";
           } else if (cell.state === "unknown") {
-            grid_cell.style.border = "1px dashed #818ea3";
+            grid_cell.style.border = "1px solid #4b5568";
             // grid_cell.style.opacity = "0.5";
           }
         }
@@ -414,6 +477,10 @@
       await postName("mosaic3");
     });
 
+    buttonFour.addEventListener("click", () => {
+      window.location.href = "game_mode.html";
+    });
+
     connectWebSocket();
 
     // fetchCurrentPosition();
@@ -550,7 +617,7 @@
             
             // grid_cell.style.opacity = "0.5";
           } else if (cell.state === "unknown") {
-            grid_cell.style.border = "1px dashed gray";
+            grid_cell.style.border = "1px solid black";
             // grid_cell.style.opacity = "0.5";
           }
         }
@@ -696,3 +763,5 @@
   </script>
 </body>
 </html> -->
+
+

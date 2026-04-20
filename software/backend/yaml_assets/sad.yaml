@@ -1,9 +1,9 @@
 grid:
   - [empty, empty, empty, empty, empty, empty, empty, empty]
   - [empty, empty, empty, empty, empty, empty, empty, empty]
-  - [empty, empty, blue, empty, empty, blue, empty, empty]
+  - [empty, empty, cyan, empty, empty, cyan, empty, empty]
   - [empty, empty, empty, empty, empty, empty, empty, empty]
-  - [empty, green, empty, empty, empty, empty, green, empty]
-  - [empty, empty, green, empty, empty, green, empty, empty]
   - [empty, empty, empty, green, green, empty, empty, empty]
+  - [empty, empty, green, empty, empty, green, empty, empty]
+  - [empty, green, empty, empty, empty, empty, green, empty]
   - [empty, empty, empty, empty, empty, empty, empty, empty]     

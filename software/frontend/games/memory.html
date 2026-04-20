@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>MIRA Display</title>
+	<title>MIRA - Memory Game</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 	<style>
@@ -13,27 +13,17 @@
 			--text-main: #eef1f8;
 			--text-sub: #8a93a8;
 			--grid-bg: #0e1018;
-
-			/* State colors — all meet 3:1 contrast on dark bg */
-			--correct-fill:   #0d3320;
-			--correct-border: #22c55e;   /* 4.6:1 on --page-bg */
-			--correct-icon:   #22c55e;
-
-			--incorrect-fill:   #2d0e0e;
-			--incorrect-border: #ef4444; /* 4.5:1 */
-			--incorrect-icon:   #ef4444;
-
-			--unknown-fill:   #1a1c24;
+			--correct-fill: #0d3320;
+			--correct-border: #22c55e;
+			--incorrect-fill: #2d0e0e;
+			--incorrect-border: #ef4444;
+			--unknown-fill: #1a1c24;
 			--unknown-border: #6b7280;
-			--unknown-icon:   #9ca3af;
-
-			--target-border:  #9b5cff;
-			--target-glow:    rgba(155,92,255,0.28);
-			--target-fill:    rgba(155,92,255,0.16);
-			--target-ring:    #d6c2ff;
-
-			--empty-border:   rgba(255, 255, 255, 0.08);
-
+			--target-border: #9b5cff;
+			--target-glow: rgba(155,92,255,0.28);
+			--target-fill: rgba(155,92,255,0.16);
+			--target-ring: #d6c2ff;
+			--empty-border: rgba(255,255,255,0.08);
 			--focus-ring: rgba(250,204,21,0.7);
 		}
 
@@ -42,7 +32,10 @@
 		body {
 			margin: 0;
 			min-height: 100vh;
-			background: var(--page-bg);
+			background:
+				radial-gradient(circle at top left, rgba(155,92,255,0.16), transparent 28%),
+				radial-gradient(circle at top right, rgba(38,166,181,0.12), transparent 30%),
+				var(--page-bg);
 			color: var(--text-main);
 			font-family: 'DM Mono', monospace;
 			display: flex;
@@ -52,9 +45,14 @@
 			gap: 18px;
 		}
 
-		/* ── Header ── */
+		.topbar,
+		.display-panel,
+		.status-bar,
+		.complete-banner {
+			width: min(1200px, 100%);
+		}
+
 		.topbar {
-			width: min(900px, 100%);
 			display: flex;
 			align-items: center;
 			gap: 12px;
@@ -63,22 +61,37 @@
 		.back-button {
 			appearance: none;
 			border: 1px solid rgba(255,255,255,0.12);
-			background: transparent;
+			background: rgba(255,255,255,0.03);
 			color: var(--text-main);
-			width: 44px;
-			height: 44px;
+			width: 48px;
+			height: 48px;
 			cursor: pointer;
-			border-radius: 8px;
+			border-radius: 10px;
 			display: grid;
 			place-items: center;
-			transition: background 130ms, border-color 130ms;
-			flex-shrink: 0;
+			transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
 		}
-		.back-button svg { width: 22px; height: 22px; stroke: currentColor; stroke-width: 2.2; fill: none; }
-		.back-button:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.25); }
-		.back-button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
 
-		/* ── Title ── */
+		.back-button svg {
+			width: 24px;
+			height: 24px;
+			stroke: currentColor;
+			stroke-width: 2.2;
+			fill: none;
+		}
+
+		.back-button:hover,
+		.back-button:focus-visible {
+			transform: translateX(-2px);
+			background: rgba(255,255,255,0.08);
+			border-color: rgba(255,255,255,0.24);
+			outline: none;
+		}
+
+		.back-button:focus-visible {
+			box-shadow: 0 0 0 3px var(--focus-ring);
+		}
+
 		.headline {
 			font-family: 'Syne', sans-serif;
 			font-weight: 800;
@@ -87,38 +100,19 @@
 			margin: 0;
 			text-align: center;
 			line-height: 1;
-			/* High-contrast white — no color that might confuse with state colors */
 			color: #fff;
 		}
 
-		.status-bar {
-			width: min(900px, 100%);
-			background: var(--panel-bg);
-			border: 1px solid rgba(255,255,255,0.07);
-			border-radius: 8px;
-			padding: 10px 16px;
-			display: flex;
-			align-items: center;
-			gap: 10px;
-			min-height: 46px;
-		}
-		.status-dot {
-			width: 8px; height: 8px;
-			border-radius: 50%;
-			background: var(--text-sub);
-			flex-shrink: 0;
-			transition: background 300ms;
-		}
-		.status-dot.connected { background: var(--correct-border); }
-		.status-dot.error     { background: var(--incorrect-border); }
-		#statusText {
+		.subtitle {
 			margin: 0;
-			font-size: 13px;
+			text-align: center;
+			font-size: clamp(18px, 2.6vw, 24px);
 			color: var(--text-sub);
-			letter-spacing: 0.02em;
+			max-width: 760px;
 		}
 
-		/* ── Grid panel ── */
+
+
 		.display-panel {
 			width: min(900px, 100%);
 			background: var(--panel-bg);
@@ -127,6 +121,50 @@
 			padding: 20px;
 			display: block;
 			overflow: auto;
+		}
+
+		.phase-banner {
+			display: flex;
+			justify-content: space-between;
+			gap: 18px;
+			align-items: center;
+			padding: 14px 16px;
+			border-radius: 12px;
+			background: rgba(255,255,255,0.04);
+			border: 1px solid rgba(255,255,255,0.08);
+			margin-bottom: 16px;
+		}
+
+		.phase-copy {
+			min-width: 0;
+		}
+
+		.phase-kicker {
+			margin: 0;
+			font-size: 12px;
+			letter-spacing: 0.1em;
+			text-transform: uppercase;
+			color: #c9d0df;
+		}
+
+		.phase-title {
+			margin: 4px 0 0;
+			font-family: 'Syne', sans-serif;
+			font-size: clamp(24px, 3vw, 34px);
+			line-height: 1.1;
+			color: #ffffff;
+		}
+
+		.phase-clock {
+			flex-shrink: 0;
+			padding: 10px 14px;
+			border-radius: 999px;
+			background: rgba(155,92,255,0.14);
+			border: 1px solid rgba(155,92,255,0.3);
+			font-family: 'Syne', sans-serif;
+			font-size: clamp(20px, 2.4vw, 28px);
+			font-weight: 800;
+			color: #f3f6ff;
 		}
 
 		.display-layout {
@@ -153,6 +191,46 @@
 		#gridContainer {
 			display: inline-grid;
 			gap: 3px;
+			padding: 2px;
+			background: var(--grid-bg);
+			border-radius: 8px;
+		}
+
+		#gridContainer.hidden-mode .grid-cell {
+			background-color: transparent !important;
+			opacity: 0.08;
+			background-image: none !important;
+		}
+
+		#gridContainer.hidden-mode .state-correct {
+			background-color: var(--correct-fill) !important;
+			border-color: var(--correct-border) !important;
+			opacity: 1;
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") !important;
+		}
+
+		#gridContainer.hidden-mode .state-incorrect {
+			background-color: var(--incorrect-fill) !important;
+			border-color: var(--incorrect-border) !important;
+			opacity: 1;
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ef4444' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E") !important;
+		}
+
+		#gridContainer.hidden-mode .state-empty {
+			opacity: 0;
+			border-color: transparent !important;
+			background-color: transparent !important;
+		}
+
+		#gridContainer.hidden-mode .state-unknown {
+			opacity: 0;
+			border-color: transparent !important;
+			background-color: transparent !important;
+			background-image: none !important;
+		}
+
+		#gridContainer.memorize-mode .grid-cell {
+			opacity: 1;
 		}
 
 		.side-tile {
@@ -177,6 +255,41 @@
 			align-items: stretch;
 		}
 
+		.held-label,
+		.stopwatch-title {
+			margin: 0;
+			font-size: 12px;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: #c9d0df;
+		}
+
+		.held-swatch {
+			width: 76px;
+			height: 76px;
+			border-radius: 16px;
+			border: 2px solid #ffffff;
+			background: #2a2d38;
+			box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+		}
+
+		.held-value {
+			margin: 0;
+			font-size: 22px;
+			line-height: 1.15;
+			font-weight: 700;
+			color: #f3f6ff;
+			text-align: center;
+		}
+
+		.held-note,
+		.stopwatch-state {
+			margin: 0;
+			font-size: 13px;
+			line-height: 1.35;
+			text-align: center;
+			color: #c9d0df;
+		}
 
 		.stopwatch-display {
 			margin: 0;
@@ -185,19 +298,11 @@
 			background: rgba(255,255,255,0.04);
 			border: 1px solid rgba(255,255,255,0.08);
 			font-family: 'Syne', sans-serif;
-			font-size: 24px;
+			font-size: 28px;
 			font-weight: 800;
 			letter-spacing: 0.04em;
 			text-align: center;
 			color: #ffffff;
-		}
-
-		.stopwatch-state {
-			margin: 0;
-			font-size: 13px;
-			line-height: 1.35;
-			text-align: center;
-			color: #c9d0df;
 		}
 
 		.stopwatch-controls {
@@ -240,7 +345,6 @@
 
 		.stopwatch-button.primary {
 			background: #2a50d0;
-			border-color: rgba(255,255,255,0.12);
 		}
 
 		.stopwatch-button.primary:hover,
@@ -257,45 +361,10 @@
 			background: #991b1b;
 		}
 
-		.held-label {
-			margin: 0;
-			font-size: 26px;
-			letter-spacing: 0.08em;
-			text-transform: uppercase;
-			color: #ffffff;
-		}
-
-		.held-swatch {
-			width: 76px;
-			height: 76px;
-			border-radius: 16px;
-			border: 2px solid #ffffff;
-			background: #2a2d38;
-			box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
-		}
-
-		.held-value {
-			margin: 0;
-			font-size: 22px;
-			line-height: 1.15;
-			font-weight: 700;
-			color: #f3f6ff;
-			text-align: center;
-		}
-
-		.held-note {
-			margin: 0;
-			font-size: 13px;
-			line-height: 1.35;
-			text-align: center;
-			color: #c9d0df;
-		}
-
 		.grid-row {
 			display: contents;
 		}
 
-		/* ── Cell base ── */
 		.grid-cell {
 			width: clamp(48px, 5.5vw, 68px);
 			height: clamp(48px, 5.5vw, 68px);
@@ -304,24 +373,18 @@
 			position: relative;
 			opacity: 0.5;
 			transition: opacity 120ms, border-color 120ms, box-shadow 120ms, background 120ms;
-			/* Icon SVGs injected as background — centered */
 			background-size: 55% 55%;
 			background-repeat: no-repeat;
 			background-position: center;
 		}
 
-		/* ── States ── */
-
-		/* CORRECT — green border + checkmark */
 		.state-correct {
 			border-color: var(--correct-border);
 			background-color: var(--correct-fill);
 			opacity: 1;
-			/* SVG checkmark — inline encoded */
 			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322c55e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
 		}
 
-		/* INCORRECT — red border + X */
 		.state-incorrect {
 			border-color: var(--incorrect-border);
 			background-color: var(--incorrect-fill);
@@ -329,7 +392,6 @@
 			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ef4444' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
 		}
 
-		/* UNKNOWN — dashed grey border + ? */
 		.state-unknown {
 			border: 2px dashed var(--unknown-border);
 			background-color: var(--unknown-fill);
@@ -337,13 +399,11 @@
 			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/%3E%3Ccircle cx='12' cy='17' r='0.5' fill='%239ca3af'/%3E%3C/svg%3E");
 		}
 
-		/* EMPTY */
 		.state-empty {
 			opacity: 0.25;
 			border-color: var(--empty-border);
 		}
 
-		/* TARGET — bright yellow pulsing border */
 		.state-target {
 			border-color: var(--target-border) !important;
 			background-color: var(--target-fill);
@@ -369,13 +429,41 @@
 
 		@keyframes target-pulse {
 			0%, 100% { box-shadow: 0 0 0 3px var(--target-glow), inset 0 0 0 1px rgba(155,92,255,0.3); }
-			50%       { box-shadow: 0 0 0 7px rgba(155,92,255,0.14), inset 0 0 0 1px rgba(155,92,255,0.45); }
+			50%      { box-shadow: 0 0 0 7px rgba(155,92,255,0.14), inset 0 0 0 1px rgba(155,92,255,0.45); }
 		}
 
-		/* ── Complete banner ── */
+		.status-bar {
+			background: var(--panel-bg);
+			border: 1px solid rgba(255,255,255,0.07);
+			border-radius: 8px;
+			padding: 10px 16px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			min-height: 46px;
+		}
+
+		.status-dot {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			background: var(--text-sub);
+			flex-shrink: 0;
+			transition: background 300ms;
+		}
+
+		.status-dot.connected { background: var(--correct-border); }
+		.status-dot.error { background: var(--incorrect-border); }
+
+		#statusText {
+			margin: 0;
+			font-size: 13px;
+			color: var(--text-sub);
+			letter-spacing: 0.02em;
+		}
+
 		.complete-banner {
 			display: none;
-			width: min(900px, 100%);
 			background: var(--correct-fill);
 			border: 2px solid var(--correct-border);
 			border-radius: 10px;
@@ -387,17 +475,18 @@
 			color: var(--correct-border);
 			letter-spacing: 0.04em;
 		}
+
 		.complete-banner.visible { display: block; animation: banner-in 400ms ease; }
 		@keyframes banner-in {
 			from { opacity: 0; transform: translateY(6px); }
-			to   { opacity: 1; transform: translateY(0); }
+			to { opacity: 1; transform: translateY(0); }
 		}
 
 		.completion-dialog-backdrop {
 			display: none;
 			position: fixed;
 			inset: 0;
-			background: rgba(6, 8, 12, 0.72);
+			background: rgba(6,8,12,0.72);
 			backdrop-filter: blur(4px);
 			align-items: center;
 			justify-content: center;
@@ -483,12 +572,16 @@
 				min-height: auto;
 			}
 
+			.phase-banner {
+				flex-direction: column;
+				align-items: flex-start;
+			}
+
 		}
 	</style>
-	<link rel="stylesheet" href="assets/mira-theme.css" />
+	<link rel="stylesheet" href="../assets/mira-theme.css" />
 </head>
 <body>
-
 	<div class="topbar">
 		<button class="back-button" id="backButton" type="button" aria-label="Go back">
 			<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -498,9 +591,17 @@
 	</div>
 
 	<h1 class="headline">MIRA</h1>
+	<p class="subtitle">Memorize the mosaic, then rebuild it from memory before the stopwatch stops.</p>
 
+	<section class="display-panel" aria-label="Memory game board panel">
+		<div class="phase-banner" role="status" aria-live="polite">
+			<div class="phase-copy">
+				<!-- <p class="phase-kicker" id="phaseKicker">Loading puzzle...</p> -->
+				<h2 class="phase-title" id="phaseTitle">Memory Challenge</h2>
+			</div>
+			<div class="phase-clock" id="phaseClock">20.0s</div>
+		</div>
 
-	<section class="display-panel" aria-label="Mosaic grid and status panels">
 		<div class="display-layout">
 			<div class="board-and-legend">
 				<div id="gridContainer" role="grid" aria-label="8 by 8 mosaic grid"></div>
@@ -509,15 +610,15 @@
 					<nav class="legend" aria-label="Cell state legend">
 						<div class="legend-item">
 							<div class="legend-swatch legend-correct" aria-hidden="true"></div>
-							<span> Correct</span>
+							<span>Correct placement</span>
 						</div>
 						<div class="legend-item">
 							<div class="legend-swatch legend-incorrect" aria-hidden="true"></div>
-							<span> Incorrect</span>
+							<span>Wrong placement</span>
 						</div>
 						<div class="legend-item">
 							<div class="legend-swatch legend-target" aria-hidden="true"></div>
-							<span>Targets</span>
+							<span>Target cell</span>
 						</div>
 						<div class="legend-item">
 							<div class="legend-swatch legend-empty" aria-hidden="true"></div>
@@ -531,6 +632,8 @@
 					<p class="stopwatch-title">Stopwatch</p>
 					<p class="stopwatch-display" id="stopwatchDisplay" aria-live="off">00:00.0</p>
 					<!-- <p class="stopwatch-state" id="stopwatchState" aria-live="polite">Timer will start when you start playing.</p> -->
+					<button class="stopwatch-button primary" id="startGameButton" type="button">Start Game</button>
+					<button class="stopwatch-button" id="hintRevealButton" type="button">Show Hint</button>
 				</aside>
 			</div>
 		</div>
@@ -538,7 +641,7 @@
 
 	<div class="status-bar" role="status" aria-live="polite">
 		<div class="status-dot" id="statusDot" aria-hidden="true"></div>
-		<p id="statusText">Waiting for mosaic selection...</p>
+		<p id="statusText">Loading random puzzle...</p>
 	</div>
 
 	<div class="complete-banner" id="completeBanner" role="alert" aria-live="assertive">
@@ -548,7 +651,7 @@
 	<div class="completion-dialog-backdrop" id="completionDialogBackdrop" aria-hidden="true">
 		<section class="completion-dialog" role="dialog" aria-modal="true" aria-labelledby="completionDialogTitle" aria-describedby="completionDialogDescription">
 			<h2 id="completionDialogTitle">Mosaic complete</h2>
-			<!-- <p id="completionDialogDescription">Your stopwatch has been stopped automatically. Close this dialog when you're ready.</p> -->
+			<!-- <p id="completionDialogDescription">Your stopwatch has stopped automatically. Close this dialog when you're ready.</p> -->
 			<div class="completion-time" id="completionDialogTime">00:00.0</div>
 			<div class="completion-actions">
 				<button class="stopwatch-button" id="completionDialogCloseButton" type="button">Close</button>
@@ -557,19 +660,25 @@
 	</div>
 
 	<script>
-		const backButton   = document.getElementById("backButton");
-		const statusText   = document.getElementById("statusText");
-		const statusDot    = document.getElementById("statusDot");
-		const gridContainer= document.getElementById("gridContainer");
+		const backButton = document.getElementById("backButton");
+		const statusText = document.getElementById("statusText");
+		const statusDot = document.getElementById("statusDot");
+		const gridContainer = document.getElementById("gridContainer");
 		const completeBanner = document.getElementById("completeBanner");
 		const stopwatchDisplay = document.getElementById("stopwatchDisplay");
 		const stopwatchState = document.getElementById("stopwatchState");
+		const startGameButton = document.getElementById("startGameButton");
+		const hintRevealButton = document.getElementById("hintRevealButton");
 		const completionDialogBackdrop = document.getElementById("completionDialogBackdrop");
 		const completionDialogTime = document.getElementById("completionDialogTime");
 		const completionDialogCloseButton = document.getElementById("completionDialogCloseButton");
+		const phaseKicker = document.getElementById("phaseKicker");
+		const phaseTitle = document.getElementById("phaseTitle");
+		const phaseClock = document.getElementById("phaseClock");
 
 		let currentGrid = null;
 		let currentGridSignature = "";
+		let currentPuzzle = null;
 		let lastConfirmationCounter = 0;
 		let lastHoverKey = null;
 		const HOVER_BEEP_INTERVAL_MS = 220;
@@ -585,9 +694,20 @@
 		let stopwatchStartedAtMs = null;
 		let stopwatchTimerId = null;
 		let stopwatchRunning = false;
+		let hintRevealEnabled = false;
 		let completionDialogOpen = false;
 		let completionDialogReturnFocus = null;
-		let completionHandledForCurrentMosaic = false;
+		let completionHandledForCurrentPuzzle = false;
+		let gamePhase = "loading";
+		let memorizeRemainingMs = 10000;
+		let memorizeTimerId = null;
+		let boardRectified = false;
+		let puzzleLoading = false;
+
+		function setStatus(message, state = "normal") {
+			statusText.textContent = message;
+			statusDot.className = "status-dot" + (state === "connected" ? " connected" : state === "error" ? " error" : "");
+		}
 
 		function formatStopwatch(ms) {
 			const safeMs = Math.max(0, Math.floor(ms));
@@ -607,12 +727,65 @@
 			completionDialogTime.textContent = display;
 		}
 
+		function setPhaseUI(title, clockText) {
+			// phaseKicker.textContent = kicker;
+			phaseTitle.textContent = title;
+			phaseClock.textContent = clockText;
+		}
+
 		function updateStopwatchStateLabel(message) {
 			stopwatchState.textContent = message;
 		}
 
+		function updateHintButton() {
+			hintRevealButton.disabled = gamePhase !== "play";
+			hintRevealButton.textContent = hintRevealEnabled ? "Hide Hint" : "Show Hint";
+		}
+
+		function updateStartButton() {
+			if (gamePhase === "loading") {
+				startGameButton.disabled = true;
+				startGameButton.textContent = "Loading...";
+				return;
+			}
+
+			if (gamePhase === "ready") {
+				startGameButton.disabled = boardRectified !== true;
+				startGameButton.textContent = "Start Game";
+				return;
+			}
+
+			startGameButton.disabled = true;
+			startGameButton.textContent = "In Progress";
+		}
+
+		function formatMemorizeClockText() {
+			return `${(memorizeRemainingMs / 1000).toFixed(1)}s`;
+		}
+
+		function startMemorizeTimerIfReady() {
+			if (gamePhase !== "memorize" || memorizeTimerId !== null || boardRectified !== true) {
+				return;
+			}
+
+			memorizeTimerId = window.setInterval(() => {
+				if (gamePhase !== "memorize" || boardRectified !== true) {
+					return;
+				}
+
+				memorizeRemainingMs = Math.max(0, memorizeRemainingMs - 100);
+				phaseClock.textContent = formatMemorizeClockText();
+
+				if (memorizeRemainingMs <= 0) {
+					window.clearInterval(memorizeTimerId);
+					memorizeTimerId = null;
+					enterPlayPhase();
+				}
+			}, 100);
+		}
+
 		function startStopwatch() {
-			if (stopwatchRunning) return;
+			if (stopwatchRunning || gamePhase !== "play") return;
 			stopwatchStartedAtMs = performance.now();
 			stopwatchRunning = true;
 			stopwatchTimerId = window.setInterval(renderStopwatch, 100);
@@ -633,13 +806,12 @@
 			renderStopwatch();
 		}
 
-		function resetStopwatch() {
+		function resetTimerOnly() {
 			stopStopwatch();
 			stopwatchElapsedMs = 0;
 			stopwatchStartedAtMs = null;
 			renderStopwatch();
-			// updateStopwatchStateLabel("Timer will start when your first piece is placed.");
-			closeCompletionDialog();
+			// updateStopwatchStateLabel(gamePhase === "play" ? "Timer will start when your first piece is placed." : "Memorize the mosaic.");
 		}
 
 		function openCompletionDialog() {
@@ -714,7 +886,6 @@
 			ctx.resume().then(() => {
 				flushPendingAudio();
 			}).catch(() => {
-		
 			});
 		}
 
@@ -738,7 +909,6 @@
 			ctx.resume().then(() => {
 				warm();
 			}).catch(() => {
-		
 			});
 		}
 
@@ -753,17 +923,13 @@
 			const ctx = ensureAudioContext();
 			const osc = ctx.createOscillator();
 			const env = ctx.createGain();
-
 			osc.type = type;
 			osc.frequency.setValueAtTime(freq, when);
-
 			env.gain.setValueAtTime(0.0001, when);
 			env.gain.exponentialRampToValueAtTime(gain, when + 0.012);
 			env.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-
 			osc.connect(env);
 			env.connect(ctx.destination);
-
 			osc.start(when);
 			osc.stop(when + duration + 0.02);
 		}
@@ -807,7 +973,6 @@
 			if (nextCounter > lastConfirmationCounter) {
 				const delta = nextCounter - lastConfirmationCounter;
 				for (let i = 0; i < delta; i++) {
-					// Temp disable bell sound until we have a better way to prevent multiple overlapping sounds when several confirmations come in at once
 					playBell();
 				}
 			}
@@ -820,7 +985,7 @@
 		}
 
 		function checkHoverChime(data) {
-			if (data.board_rectified !== true) {
+			if (data.board_rectified !== true || gamePhase !== "play") {
 				lastHoverKey = null;
 				nextHoverBeepAtMs = 0;
 				return;
@@ -860,62 +1025,20 @@
 
 		function normalizeColor(name) {
 			const map = {
-				cyan:    "#26a6b5",
+				cyan: "#26a6b5",
 				magenta: "#A23C3E",
-				green:   "#1a7a40",
-				red:     "#b02020",
-				blue:    "#2a50d0",
-				yellow:  "#c8a818",
-				orange:  "#c06010",
-				white:   "#d8dce8",
-				black:   "#181a20",
+				green: "#1a7a40",
+				red: "#b02020",
+				blue: "#2a50d0",
+				yellow: "#c8a818",
+				orange: "#c06010",
+				white: "#d8dce8",
+				black: "#181a20",
 			};
 			if (!name || typeof name !== "string") return "#2a2d38";
 			return map[name.toLowerCase()] || name;
 		}
 
-		function setStatus(msg, state = "normal") {
-			statusText.textContent = msg;
-			statusDot.className = "status-dot" + (state === "connected" ? " connected" : state === "error" ? " error" : "");
-		}
-
-		function showMosaicGrid(grid) {
-			gridContainer.innerHTML = "";
-			const cols = grid[0]?.length ?? 8;
-			gridContainer.style.gridTemplateColumns = `repeat(${cols}, auto)`;
-			gridContainer.style.gridTemplateRows    = `repeat(${grid.length}, auto)`;
-
-			for (let r = 0; r < grid.length; r++) {
-				for (let c = 0; c < grid[r].length; c++) {
-					const cell = document.createElement("div");
-					cell.className = "grid-cell";
-					cell.dataset.row = r;
-					cell.dataset.col = c;
-					cell.style.backgroundColor = normalizeColor(grid[r][c]);
-					// Accessible label
-					cell.setAttribute("role", "gridcell");
-					cell.setAttribute("aria-label", `Row ${r+1}, column ${c+1}: ${grid[r][c] ?? "empty"}`);
-					gridContainer.appendChild(cell);
-				}
-			}
-		}
-
-		function getCellElement(row, col) {
-			return gridContainer.querySelector(`[data-row="${row}"][data-col="${col}"]`);
-		}
-
-		function resetCellStyles() {
-			gridContainer.querySelectorAll(".grid-cell").forEach(cell => {
-				cell.className = "grid-cell";
-				// restore base color
-				const r = parseInt(cell.dataset.row);
-				const c = parseInt(cell.dataset.col);
-				if (currentGrid?.[r]?.[c]) {
-					cell.style.backgroundColor = normalizeColor(currentGrid[r][c]);
-				}
-			});
-		}
-		
 		function speakHeldState(phrase) {
 			if (!("speechSynthesis" in window)) return;
 			if (!phrase || phrase === lastSpokenHeldState) return;
@@ -928,61 +1051,239 @@
 			window.speechSynthesis.speak(utterance);
 		}
 
+		function showMosaicGrid(grid) {
+			gridContainer.innerHTML = "";
+			const cols = grid[0]?.length ?? 8;
+			gridContainer.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+			gridContainer.style.gridTemplateRows = `repeat(${grid.length}, auto)`;
+			for (let r = 0; r < grid.length; r++) {
+				for (let c = 0; c < grid[r].length; c++) {
+					const cell = document.createElement("div");
+					cell.className = "grid-cell";
+					cell.dataset.row = r;
+					cell.dataset.col = c;
+					cell.style.backgroundColor = normalizeColor(grid[r][c]);
+					cell.setAttribute("role", "gridcell");
+					cell.setAttribute("aria-label", `Row ${r + 1}, column ${c + 1}: ${grid[r][c] ?? "empty"}`);
+					gridContainer.appendChild(cell);
+				}
+			}
+		}
+
+		
+
+		function getCellElement(row, col) {
+			return gridContainer.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+		}
+
+		function resetCellStyles() {
+			gridContainer.querySelectorAll(".grid-cell").forEach(cell => {
+				cell.className = "grid-cell";
+				const r = parseInt(cell.dataset.row, 10);
+				const c = parseInt(cell.dataset.col, 10);
+				if (!gridContainer.classList.contains("hidden-mode") && currentGrid?.[r]?.[c]) {
+					cell.style.backgroundColor = normalizeColor(currentGrid[r][c]);
+				}
+			});
+		}
+
 		function applyCellState(list) {
 			if (!Array.isArray(list)) return;
 			list.forEach(({ x, y, state }) => {
 				const cell = getCellElement(x, y);
 				if (!cell) return;
 				const stateClass = {
-					correct:   "state-correct",
+					correct: "state-correct",
 					incorrect: "state-incorrect",
-					empty:     "state-empty",
-					unknown:   "state-empty",
 				}[state];
-				if (stateClass) cell.classList.add(stateClass);
-
-				// Update accessible label
+				if (!stateClass) return;
+				cell.classList.add(stateClass);
 				const label = cell.getAttribute("aria-label").split(":")[0];
 				cell.setAttribute("aria-label", `${label}: ${state}`);
 			});
 		}
 
+		function clearTargetClasses() {
+			gridContainer.querySelectorAll(".state-target").forEach(cell => cell.classList.remove("state-target"));
+		}
+
 		function applyTargets(targets) {
 			if (!Array.isArray(targets)) return;
+			if (gamePhase !== "memorize") return;
 			targets.forEach(({ x, y }) => {
 				const cell = getCellElement(x, y);
 				if (cell) cell.classList.add("state-target");
 			});
 		}
 
+		function enterMemorizePhase() {
+			gamePhase = "memorize";
+			hintRevealEnabled = false;
+			updateHintButton();
+			updateStartButton();
+			gridContainer.classList.remove("hidden-mode");
+			gridContainer.classList.add("memorize-mode");
+			memorizeRemainingMs = 10000;
+			setPhaseUI("Memorize the mosaic", formatMemorizeClockText());
+			updateStopwatchStateLabel("Memorize the mosaic.");
+			clearTargetClasses();
+			stopMemorizeTimer();
+			startMemorizeTimerIfReady();
+		}
+
+		function enterReadyPhase() {
+			gamePhase = "ready";
+			hintRevealEnabled = false;
+			updateHintButton();
+			stopMemorizeTimer();
+			gridContainer.classList.remove("memorize-mode");
+			gridContainer.classList.add("hidden-mode");
+			clearTargetClasses();
+			setPhaseUI("Memory Challenge", "Ready");
+			updateStopwatchStateLabel("Press Start to reveal the mosaic and begin memorizing.");
+			updateStartButton();
+		}
+
+		function enterPlayPhase() {
+			stopMemorizeTimer();
+			gamePhase = "play";
+			hintRevealEnabled = false;
+			updateHintButton();
+			updateStartButton();
+			gridContainer.classList.remove("memorize-mode");
+			gridContainer.classList.add("hidden-mode");
+			clearTargetClasses();
+			resetCellStyles();
+			resetTimerOnly();
+			setPhaseUI("Rebuild the mosaic", "Go");
+			// updateStopwatchStateLabel("Timer will start when your first piece is placed.");
+		}
+
+		function stopMemorizeTimer() {
+			if (memorizeTimerId !== null) {
+				clearInterval(memorizeTimerId);
+				memorizeTimerId = null;
+			}
+		}
+
+		function restartGame() {
+			completionHandledForCurrentPuzzle = false;
+			previousMosaicComplete = false;
+			completeBanner.classList.remove("visible");
+			closeCompletionDialog();
+			stopMemorizeTimer();
+			stopStopwatch();
+			stopwatchElapsedMs = 0;
+			stopwatchStartedAtMs = null;
+			hintRevealEnabled = false;
+			updateHintButton();
+			renderStopwatch();
+			void loadRandomPuzzle();
+		}
+
+		function currentPuzzleLabel(puzzleName) {
+			return puzzleName ? puzzleName : "Random mosaic";
+		}
+
+		async function loadRandomPuzzle() {
+			if (puzzleLoading) return;
+			puzzleLoading = true;
+			boardRectified = false;
+			updateStartButton();
+			try {
+				setStatus("Loading random puzzle...", "connected");
+				setPhaseUI("Loading puzzle", "...");
+				const libraryResponse = await fetch("http://127.0.0.1:8000/mosaic_library");
+				if (!libraryResponse.ok) {
+					throw new Error(`Library request failed (${libraryResponse.status})`);
+				}
+				const libraryData = await libraryResponse.json();
+				const mosaics = Array.isArray(libraryData.mosaics) ? libraryData.mosaics : [];
+				if (mosaics.length === 0) {
+					throw new Error("No mosaics available");
+				}
+				const choice = mosaics[Math.floor(Math.random() * mosaics.length)];
+				currentPuzzle = choice;
+				const selectionResponse = await fetch(`http://127.0.0.1:8000/${choice.endpoint}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ name: choice.name }),
+				});
+				if (!selectionResponse.ok) {
+					throw new Error(`Selection request failed (${selectionResponse.status})`);
+				}
+				const selectionData = await selectionResponse.json();
+				if (Array.isArray(selectionData.grid) && selectionData.grid.length > 0) {
+					currentGrid = selectionData.grid;
+					currentGridSignature = JSON.stringify(currentGrid);
+					showMosaicGrid(currentGrid);
+					resetCellStyles();
+				}
+				lastConfirmationCounter = 0;
+				lastHoverKey = null;
+				previousMosaicComplete = false;
+				completionHandledForCurrentPuzzle = false;
+				resetTimerOnly();
+				enterReadyPhase();
+				updateStartButton();
+				setStatus("Waiting for board rectification (show all 4 corner tags).", "error");
+			} catch (error) {
+				setStatus(`Could not load puzzle: ${error.message}`, "error");
+				if (phaseKicker) {
+					phaseKicker.textContent = "Load failed";
+				}
+				phaseTitle.textContent = "Press Start Game";
+				phaseClock.textContent = "--";
+				updateStartButton();
+			} finally {
+				puzzleLoading = false;
+			}
+		}
+
 		function renderFromPayload(data) {
+			boardRectified = data.board_rectified === true;
+
 			if (Array.isArray(data.grid) && data.grid.length > 0) {
 				const sig = JSON.stringify(data.grid);
 				if (sig !== currentGridSignature) {
 					currentGrid = data.grid;
 					currentGridSignature = sig;
 					showMosaicGrid(currentGrid);
-					lastConfirmationCounter = Number.isFinite(data.confirmation_counter) ? data.confirmation_counter : 0;
-					lastHoverKey = null;
-					previousMosaicComplete = false;
-					completeBanner.classList.remove("visible");
-					completionHandledForCurrentMosaic = false;
-					resetStopwatch();
+					resetCellStyles();
+					clearTargetClasses();
+					completionHandledForCurrentPuzzle = false;
+					enterReadyPhase();
 				}
 			}
-
-			if (!currentGrid) {
-				renderStopwatch();
-				setStatus("Waiting for mosaic selection...");
-				return;
-			}
-
-			if (data.board_rectified !== true) {
-				lastSpokenHeldState = "";
+			
+			if (boardRectified !== true) {
+				updateStartButton();
 				renderStopwatch();
 				resetCellStyles();
 				completeBanner.classList.remove("visible");
 				setStatus("Waiting for board rectification (show all 4 corner tags).", "error");
+				return;
+			}
+
+			updateStartButton();
+
+			if (!currentGrid) {
+				renderStopwatch();
+				setStatus("Waiting for puzzle data...");
+				return;
+			}
+
+			if (gamePhase === "ready") {
+				setStatus("Board ready. Press Start Game.", "connected");
+				renderStopwatch();
+				return;
+			}
+
+			if (gamePhase === "memorize") {
+				startMemorizeTimerIfReady();
+				lastSpokenHeldState = "";
+				setStatus(`Memorize the puzzle. Rebuild starts in ${phaseClock.textContent}.`, "connected");
+				renderStopwatch();
 				return;
 			}
 
@@ -993,61 +1294,97 @@
 			}
 
 			const currentBlocksOnboard = Number(data.current_blocks_onboard || 0);
+			const totalNonEmptyExpected = Number(data.total_non_empty_expected || 0);
 			if (!stopwatchRunning && stopwatchElapsedMs === 0 && currentBlocksOnboard > 0) {
 				startStopwatch();
 			}
-
-			resetCellStyles();
-			applyCellState(data.cell_state);
-			applyTargets(data.targets);
-			processBackendSignals(data.confirmation_counter, data.mosaic_complete);
-
 			const done = data.mosaic_complete === true;
-			if (done) {
-				if (!completionHandledForCurrentMosaic) {
+			const shouldRevealBoardState = hintRevealEnabled || done;
+
+			if (shouldRevealBoardState) {
+				gridContainer.classList.add("hidden-mode");
+				resetCellStyles();
+				// Reapply every frame so websocket updates preserve reveal state.
+				applyCellState(data.cell_state);
+				processBackendSignals(data.confirmation_counter, data.mosaic_complete);
+				if (done && !completionHandledForCurrentPuzzle) {
 					stopStopwatch(true);
 					openCompletionDialog();
-					completionHandledForCurrentMosaic = true;
+					completionHandledForCurrentPuzzle = true;
 				}
-				setStatus("Mosaic complete.", "connected");
-				completeBanner.classList.add("visible");
+				if (done) {
+					setStatus("Mosaic complete.", "connected");
+					
+					completeBanner.classList.add("visible");
+					gridContainer.classList.remove("hidden-mode");
+				} else {
+					setStatus(`Hint reveal active: ${currentBlocksOnboard}/${totalNonEmptyExpected || "?"} pieces onboard.`, "connected");
+					completeBanner.classList.remove("visible");
+				}
 				renderStopwatch();
 				return;
+			} else {
+				gridContainer.classList.add("hidden-mode");
+				clearTargetClasses();
 			}
 
+			resetCellStyles();
+			// Only apply cell state at the end to not give hints before the 
+			// player places a block
+			// processBackendSignals(data.confirmation_counter, data.mosaic_complete);
+
+			completeBanner.classList.remove("visible");
 			if (stopwatchRunning) {
 				renderStopwatch();
 			}
 
-			completeBanner.classList.remove("visible");
-
 			if (currentBlocksOnboard > 0) {
-				setStatus(`Pieces onboard: ${currentBlocksOnboard}.`, "connected");
+				setStatus(`Pieces onboard: ${currentBlocksOnboard}/${totalNonEmptyExpected || "?"}.`, "connected");
 			} else {
-				setStatus("Mosaic loaded. Waiting for tile detection...", "connected");
+				setStatus("Rebuild the hidden mosaic.", "connected");
 			}
 		}
 
 		function connectWebSocket() {
 			const ws = new WebSocket("ws://localhost:8000/ws");
-			ws.onopen    = () => setStatus("Connected. Waiting for data...", "connected");
-			ws.onmessage = (e) => {
+			ws.onopen = () => setStatus("Connected. Waiting for data...", "connected");
+			ws.onmessage = (event) => {
 				try {
-					const data = JSON.parse(e.data);
+					const data = JSON.parse(event.data);
 					renderFromPayload(data);
 					checkHoverChime(data);
+				} catch {
+					setStatus("Received invalid data.", "error");
 				}
-				catch { setStatus("Received invalid data.", "error"); }
 			};
-			ws.onerror  = () => setStatus("WebSocket error.", "error");
-			ws.onclose  = () => {
+			ws.onerror = () => setStatus("WebSocket error.", "error");
+			ws.onclose = () => {
 				setStatus("Disconnected — retrying...", "error");
 				setTimeout(connectWebSocket, 1000);
 			};
 		}
 
 		backButton.addEventListener("click", () => {
-			window.history.length > 1 ? window.history.back() : (window.location.href = "library.html");
+			window.location.href = "../game_mode.html";
+		});
+
+		hintRevealButton.addEventListener("click", () => {
+			if (gamePhase !== "play") return;
+			hintRevealEnabled = !hintRevealEnabled;
+			updateHintButton();
+		});
+
+		startGameButton.addEventListener("click", () => {
+			if (gamePhase !== "ready") return;
+			if (!currentGrid) {
+				setStatus("Waiting for puzzle data...", "error");
+				return;
+			}
+			if (boardRectified !== true) {
+				setStatus("Waiting for board rectification (show all 4 corner tags).", "error");
+				return;
+			}
+			enterMemorizePhase();
 		});
 
 		completionDialogCloseButton.addEventListener("click", closeCompletionDialog);
@@ -1057,14 +1394,14 @@
 			}
 		});
 		document.addEventListener("keydown", handleCompletionDialogKeydown);
-
-		renderStopwatch();
-		// updateStopwatchStateLabel("Timer will start when your first piece is placed.");
-
-		connectWebSocket();
-
 		document.addEventListener("pointerdown", primeAudioOnce, { once: true });
 		document.addEventListener("keydown", primeAudioOnce, { once: true });
+
+		renderStopwatch();
+		updateHintButton();
+		updateStartButton();
+		connectWebSocket();
+		void loadRandomPuzzle();
 	</script>
 </body>
 </html>

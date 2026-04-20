@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MIRA - Pattern Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <style>
+    :root {
+    --page-bg: #0a0c10;
+    --panel-bg: #12151c;
+    --text-main: #eef1f8;
+    --text-sub: #8a93a8;
+    --grid-bg: #0e1018;
+    --focus-ring: rgba(250,204,21,0.7);
+    --empty-border: rgba(255,255,255,0.08);
+    --step-border: rgba(255,255,255,0.18);
+    --step-active: #f59e0b;
+    --step-matched: #22c55e;
+    --incorrect: #ef4444;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+    radial-gradient(circle at top left, rgba(155,92,255,0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(38,166,181,0.12), transparent 30%),
+    var(--page-bg);
+    color: var(--text-main);
+    font-family: 'DM Mono', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 40px;
+    gap: 18px;
+    }
+
+    
+
+    .topbar,
+    .display-panel,
+    .status-bar,
+    .result-banner {
+    width: min(1200px, 100%);
+    }
+
+    .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    }
+
+    .back-button {
+        appearance: none;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.03);
+        color: var(--text-main);
+        width: 48px;
+        height: 48px;
+        cursor: pointer;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+    }
+
+    .back-button svg {
+    width: 24px;
+    height: 24px;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    fill: none;
+    }
+
+    .back-button:hover,
+    .back-button:focus-visible {
+    transform: translateX(-2px);
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.24);
+    outline: none;
+    }
+
+    .back-button:focus-visible {
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+
+    .headline {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(48px, 8vw, 72px);
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-align: center;
+    line-height: 1;
+    color: #fff;
+    }
+
+    .subtitle {
+    margin: 0;
+    text-align: center;
+    font-size: clamp(18px, 2.6vw, 24px);
+    color: var(--text-sub);
+    max-width: 860px;
+    }
+
+    .display-panel {
+        width: min(900px, 100%);
+        background: var(--panel-bg);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 12px;
+        padding: 20px;
+        display: block;
+        overflow: auto;
+    }
+
+    .phase-banner {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: center;
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        margin-bottom: 16px;
+    }
+
+    .phase-title {
+        margin: 0;
+        font-family: 'Syne', sans-serif;
+        font-size: clamp(24px, 3vw, 34px);
+        line-height: 1.1;
+        color: #ffffff;
+    }
+
+    .phase-clock {
+        flex-shrink: 0;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(155,92,255,0.14);
+        border: 1px solid rgba(155,92,255,0.3);
+        font-family: 'Syne', sans-serif;
+        font-size: clamp(18px, 2.3vw, 24px);
+        font-weight: 800;
+        color: #f3f6ff;
+    }
+
+    .display-layout {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 18px;
+        width: 100%;
+    }
+
+    .board-column,
+    .side-column {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .board-column {
+    align-items: center;
+    flex: 1;
+    }
+
+    #gridContainer {
+        display: inline-grid;
+        gap: 3px;
+        padding: 2px;
+        background: var(--grid-bg);
+        border-radius: 8px;
+    }
+
+    .grid-cell {
+    width: clamp(44px, 5.2vw, 62px);
+    height: clamp(44px, 5.2vw, 62px);
+    border: 2px solid var(--empty-border);
+    border-radius: 4px;
+    opacity: 0.9;
+    background: #151924;
+    transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+
+    .grid-cell.seq-active {
+    border-color: var(--step-active);
+    background: rgba(245, 158, 11, 0.2);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
+    }
+
+    .grid-cell.seq-matched {
+    border-color: var(--step-matched);
+    background: rgba(34, 197, 94, 0.2);
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+    }
+
+    /* .grid-cell.seq-next {
+        border-color: #d6c2ff;
+        box-shadow: 0 0 0 2px rgba(214, 194, 255, 0.22);
+    } */
+
+    .grid-cell.state-incorrect {
+    border-color: var(--incorrect);
+    background-color: rgba(127, 29, 29, 0.38);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.22);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ef4444' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'/%3E%3Cline x1='6' y1='6' x2='18' y2='18'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 72% 72%;
+    }
+
+    .side-tile {
+    width: 210px;
+    background: #151a22;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 10px;
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    }
+
+    .scoreboard-panel,
+    .sequence-panel {
+    min-height: 220px;
+    }
+
+    .scoreboard-panel .stopwatch-button {
+    margin-top: auto;
+    }
+
+    .scoreboard-panel .stopwatch-button + .stopwatch-button {
+    margin-top: 8px;
+    }
+
+    .tile-title {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #c9d0df;
+    }
+
+    .score-value {
+    margin: 0;
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(30px, 5vw, 46px);
+    line-height: 1;
+    color: #ffffff;
+    }
+
+    .score-meta {
+    margin: 0;
+    font-size: 13px;
+    color: #c9d0df;
+    }
+
+    .expected-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #c9d0df;
+    }
+
+    .expected-chip {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.4);
+    background: #2a2d38;
+    flex-shrink: 0;
+    }
+
+    .stopwatch-button {
+    appearance: none;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: #1c2230;
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 9px 10px;
+    font: inherit;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: transform 130ms ease, background 130ms ease, border-color 130ms ease;
+    }
+
+    .stopwatch-button:hover,
+    .stopwatch-button:focus-visible {
+    transform: translateY(-1px);
+    background: #263049;
+    border-color: rgba(255,255,255,0.32);
+    outline: none;
+    }
+
+    .stopwatch-button:focus-visible {
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+
+    .pattern-strip {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-start;
+    }
+
+    .sequence-step {
+        width: 42px;
+        height: 42px;
+        border-radius: 8px;
+        border: 2px solid var(--step-border);
+        background: #1c2230;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 700;
+        color: #ffffff;
+        transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+    }
+
+    .sequence-step.hidden {
+        background: #11151f;
+        color: rgba(255,255,255,0.45);
+    }
+
+    .sequence-step.active {
+        transform: translateY(-1px) scale(1.03);
+        border-color: var(--step-active);
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
+    }
+
+    .sequence-step.matched {
+        border-color: var(--step-matched);
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.20);
+    }
+/* 
+    .sequence-step.next {
+        border-color: #d6c2ff;
+    } */
+
+    .sequence-label {
+        margin: 0;
+        font-size: 13px;
+        color: #c9d0df;
+    }
+
+    .status-bar {
+        background: var(--panel-bg);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 8px;
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 46px;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-sub);
+        flex-shrink: 0;
+        transition: background 300ms;
+    }
+
+    .status-dot.connected { background: #22c55e; }
+    .status-dot.error { background: var(--incorrect); }
+
+    #statusText {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text-sub);
+        letter-spacing: 0.02em;
+    }
+
+    .result-banner {
+        display: none;
+        background: rgba(127, 29, 29, 0.26);
+        border: 2px solid var(--incorrect);
+        border-radius: 10px;
+        padding: 16px 24px;
+        text-align: center;
+        font-family: 'Syne', sans-serif;
+        font-size: clamp(18px, 3vw, 24px);
+        font-weight: 700;
+        color: #ffd7d7;
+        letter-spacing: 0.04em;
+    }
+
+    .result-banner.visible { display: block; }
+
+    @media (max-width: 860px) {
+    .display-layout {
+    flex-direction: column;
+    align-items: center;
+    }
+
+    .side-column {
+    width: 100%;
+    max-width: 460px;
+    }
+
+    .side-tile {
+    width: 100%;
+    }
+
+    .phase-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    }
+    }
+    </style>
+    <link rel="stylesheet" href="../assets/mira-theme.css" />
+    </head>
+    <body>
+    <div class="topbar">
+    <button class="back-button" id="backButton" type="button" aria-label="Go back">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M15.5 5.5L9 12l6.5 6.5" />
+    </svg>
+    </button>
+    </div>
+
+    <h1 class="headline">MIRA</h1>
+    <p class="subtitle">Watch the sequence of highlighted squares, then place blocks on the board in the same order. The sequence grows by one each round.</p>
+
+    <section class="display-panel" aria-label="Pattern game board panel">
+    <!-- <div class="phase-banner" role="status" aria-live="polite"> -->
+    <!-- <h2 class="phase-title" id="phaseTitle">Pattern Challenge</h2>
+    <div class="phase-clock" id="phaseClock">Ready</div> -->
+    <!-- </div> -->
+
+
+    <div class="display-layout">
+    <div class="board-column">
+    <div id="gridContainer" role="grid" aria-label="Pattern game coordinate grid"></div>
+    </div>
+    <div class="side-column" aria-label="Pattern info panels">
+    <aside class="side-tile scoreboard-panel" aria-label="Scoreboard panel">
+    <!-- <p class="tile-title">Scoreboard</p> -->
+    <p class="score-value" id="scoreValue">0</p>
+    <!-- <p class="score-meta" id="roundValue">Round: 0</p> -->
+    <button class="stopwatch-button primary" id="startGameButton" type="button">Start Game</button>
+    </aside>
+
+   
+
+
+    </div>
+    </div>
+    </section>
+
+    <div class="status-bar" role="status" aria-live="polite">
+    <div class="status-dot" id="statusDot" aria-hidden="true"></div>
+    <p id="statusText">Waiting for camera stream...</p>
+    </div>
+
+    <div class="result-banner" id="resultBanner" role="alert" aria-live="assertive"></div>
+
+    <script>
+    const DEFAULT_ROWS = 8;
+    const DEFAULT_COLS = 8;
+    const MEMORIZE_STEP_MS = 850;
+    const MEMORIZE_GAP_MS = 200;
+    const CLEAR_ARM_FRAMES = 3;
+    const BACKEND_BASE = "http://127.0.0.1:8000";
+
+    const backButton = document.getElementById("backButton");
+    const startGameButton = document.getElementById("startGameButton");
+    const statusText = document.getElementById("statusText");
+    const statusDot = document.getElementById("statusDot");
+    const phaseTitle = document.getElementById("phaseTitle");
+    const phaseClock = document.getElementById("phaseClock");
+    const gridContainer = document.getElementById("gridContainer");
+    const scoreValue = document.getElementById("scoreValue");
+    const roundValue = document.getElementById("roundValue");
+    // const progressValue = document.getElementById("progressValue");
+    // const expectedChip = document.getElementById("expectedChip");
+    // const expectedText = document.getElementById("expectedText");
+    const sequenceLabel = document.getElementById("sequenceLabel");
+    const sequenceStrip = document.getElementById("sequenceStrip");
+    const resultBanner = document.getElementById("resultBanner");
+
+    let boardRectified = false;
+    let boardRows = DEFAULT_ROWS;
+    let boardCols = DEFAULT_COLS;
+    let cellByKey = new Map();
+
+    let sequence = [];
+    let score = 0;
+    let round = 0;
+    let expectedIndex = 0;
+    let gamePhase = "loading";
+    let memorizeRunId = 0;
+    let inputArmed = true;
+    let awaitingRoundAdvance = false;
+    let roundAdvanceTimerId = null;
+    let waitingForBoardClear = false;
+    let clearBoardStreak = 0;
+    let previousCell = null;
+    let waitingForInitialClear = false;
+    let mismatchCell = null;
+    let hasStartedGame = false;
+    let audioContext = null;
+    let audioPrimed = false;
+    let pendingBellCount = 0;
+
+    async function loadEmptyMosaic() {
+        try {
+            setStatus("Loading empty mosaic...", "connected");
+            const response = await fetch(`${BACKEND_BASE}/mosaic_empty`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: "pattern-empty" })
+            });
+            if (!response.ok) {
+                throw new Error(`Request failed (${response.status})`);
+            }
+            const data = await response.json();
+            if (Array.isArray(data.grid) && data.grid.length > 0 && Array.isArray(data.grid[0])) {
+                const rows = data.grid.length;
+                const cols = data.grid[0].length;
+                if (rows !== boardRows || cols !== boardCols) {
+                    buildCoordinateGrid(rows, cols);
+                }
+            }
+        } catch (error) {
+            setStatus(`Could not load empty mosaic: ${error.message}`, "error");
+        }
+    }
+
+
+    function delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function ensureAudioContext() {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        return audioContext;
+    }
+
+    function playTone(freq, when, duration, gain, type = "sine") {
+        const ctx = ensureAudioContext();
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, when);
+
+        env.gain.setValueAtTime(0.0001, when);
+        env.gain.exponentialRampToValueAtTime(gain, when + 0.012);
+        env.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+
+        osc.connect(env);
+        env.connect(ctx.destination);
+
+        osc.start(when);
+        osc.stop(when + duration + 0.02);
+    }
+
+    function flushPendingAudio() {
+        if (!audioContext || audioContext.state !== "running") return;
+        while (pendingBellCount > 0) {
+            playBell();
+            pendingBellCount -= 1;
+        }
+    }
+
+    function unlockAudioAndFlush() {
+        const ctx = ensureAudioContext();
+        if (ctx.state === "running") {
+            flushPendingAudio();
+            return;
+        }
+        ctx.resume().then(() => {
+            flushPendingAudio();
+        }).catch(() => {
+        });
+    }
+
+    function prewarmAudio() {
+        const ctx = ensureAudioContext();
+        const warm = () => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0, ctx.currentTime);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.001);
+        };
+
+        if (ctx.state === "running") {
+            warm();
+            return;
+        }
+
+        ctx.resume().then(() => {
+            warm();
+        }).catch(() => {
+        });
+    }
+
+    function primeAudioOnce() {
+        if (audioPrimed) return;
+        audioPrimed = true;
+        unlockAudioAndFlush();
+        prewarmAudio();
+    }
+
+    function playBell() {
+        const ctx = ensureAudioContext();
+        if (ctx.state !== "running") {
+            pendingBellCount += 1;
+            return;
+        }
+        const t = ctx.currentTime;
+        playTone(880, t, 0.18, 0.07, "triangle");
+        playTone(1320, t + 0.06, 0.22, 0.06, "sine");
+    }
+
+    function setStatus(message, state = "normal") {
+        statusText.textContent = message;
+        statusDot.className = "status-dot" + (state === "connected" ? " connected" : state === "error" ? " error" : "");
+    }
+
+    function setPhaseUI(title, clockText) {
+        if (phaseTitle) {
+            phaseTitle.textContent = title;
+        }
+        if (phaseClock) {
+            phaseClock.textContent = clockText;
+        }
+    }
+
+    function updateStartButton() {
+        if (!startGameButton) return;
+
+        if (hasStartedGame) {
+            startGameButton.disabled = false;
+            startGameButton.textContent = "Reset Game";
+            return;
+        }
+
+        const canStart = boardRectified === true && (gamePhase === "waiting" || gamePhase === "loading");
+        startGameButton.disabled = !canStart;
+        startGameButton.textContent = "Start Game";
+    }
+
+    function clearRoundAdvanceTimer() {
+        if (roundAdvanceTimerId !== null) {
+        clearTimeout(roundAdvanceTimerId);
+        roundAdvanceTimerId = null;
+        }
+    }
+
+    function showResultBanner(text) {
+        resultBanner.textContent = text;
+        resultBanner.classList.add("visible");
+    }
+
+    function hideResultBanner() {
+        resultBanner.textContent = "";
+        resultBanner.classList.remove("visible");
+    }
+
+    function cellKey(cell) {
+        return `${cell.x},${cell.y}`;
+    }
+
+    function prettyCell(cell) {
+        if (!cell) return "--";
+        return `(${cell.x}, ${cell.y})`;
+    }
+
+    function describeCell(cell) {
+        if (!cell) return "--";
+        return `Row ${cell.x}, Col ${cell.y}`;
+    }
+
+    function clearBoardHighlights() {
+        for (const el of cellByKey.values()) {
+            el.classList.remove("seq-active", "seq-matched", "seq-next", "state-incorrect");
+        }
+    }
+
+    function markMismatchCell(cell) {
+        if (!cell) return;
+        const el = cellByKey.get(cellKey(cell));
+        if (!el) return;
+        el.classList.add("state-incorrect");
+    }
+
+    function markExpectedCell(cell) {
+        if (!cell) return;
+        const el = cellByKey.get(cellKey(cell));
+        if (!el) return;
+        el.classList.add("seq-active");
+    }   
+
+    function buildCoordinateGrid(rows, cols) {
+        boardRows = rows;
+        boardCols = cols;
+        cellByKey = new Map();
+        gridContainer.innerHTML = "";
+        gridContainer.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+        gridContainer.style.gridTemplateRows = `repeat(${rows}, auto)`;
+
+        for (let x = 0; x < rows; x++) {
+            for (let y = 0; y < cols; y++) {
+                const cell = document.createElement("div");
+                cell.className = "grid-cell";
+                cell.setAttribute("role", "gridcell");
+                cell.setAttribute("aria-label", `Row ${x}, column ${y}`);
+                gridContainer.appendChild(cell);
+                cellByKey.set(`${x},${y}`, cell);
+            }
+        }
+    }
+
+    function chooseRandomCell() {
+        const totalCells = boardRows * boardCols;
+        let candidate = {
+            x: Math.floor(Math.random() * boardRows),
+            y: Math.floor(Math.random() * boardCols)
+        };
+
+        if (totalCells > 1 && sequence.length > 0) {
+            const last = sequence[sequence.length - 1];
+            for (let i = 0; i < 8 && candidate.x === last.x && candidate.y === last.y; i++) {
+                candidate = {
+                x: Math.floor(Math.random() * boardRows),
+                y: Math.floor(Math.random() * boardCols)
+                };
+            }
+        }
+
+        return candidate;
+    }
+
+    function updateScoreboard() {
+        scoreValue.textContent = `Round: ${round}`;
+        // roundValue.textContent = `Round: ${round}`;
+        // progressValue.textContent = `Progress: ${expectedIndex} / ${sequence.length}`;
+    }
+
+    function updateExpectedIndicator() {
+        return;
+    }
+
+    function renderSequenceStrip(options = {}) {
+        const {
+        revealedCount = 0,
+        activeIndex = -1,
+        hideFuture = false
+        } = options;
+
+        if (sequenceStrip) {
+            sequenceStrip.innerHTML = "";
+        }
+        clearBoardHighlights();
+
+        if (sequence.length === 0) {
+        if (sequenceLabel) {
+            sequenceLabel.textContent = "No steps yet.";
+        }
+        return;
+        }
+
+        if (sequenceLabel) {
+            sequenceLabel.textContent = gamePhase === "memorize"
+        ? "Watch the cell order."
+        : "Repeat the same cell order.";
+        }
+
+        for (let i = 0; i < sequence.length; i++) {
+        const step = document.createElement("div");
+        const stepCell = sequence[i];
+        const key = cellKey(stepCell);
+        const boardCellEl = cellByKey.get(key);
+        step.className = "sequence-step";
+
+        const shouldReveal = !hideFuture && i < revealedCount;
+        if (shouldReveal) {
+            step.textContent = prettyCell(stepCell);
+        } else {
+            step.classList.add("hidden");
+            step.textContent = "?";
+        }
+
+        if (i < expectedIndex && gamePhase === "play") {
+            step.classList.add("matched");
+            step.textContent = "\u2713";
+            if (boardCellEl) {
+                boardCellEl.classList.add("seq-matched");
+            }
+        }
+
+        if (i === expectedIndex && gamePhase === "play") {
+        step.classList.add("next");
+            if (boardCellEl) {
+                boardCellEl.classList.add("seq-next");
+            }
+        }
+
+        if (i === activeIndex) {
+        step.classList.add("active");
+        if (boardCellEl) {
+        boardCellEl.classList.add("seq-active");
+        }
+        }
+
+        if (sequenceStrip) {
+            sequenceStrip.appendChild(step);
+        }
+        }
+    }
+
+    function resetGameState() {
+        memorizeRunId += 1;
+        clearRoundAdvanceTimer();
+        sequence = [];
+        score = 0;
+        round = 0;
+        expectedIndex = 0;
+        previousCell = null;
+        mismatchCell = null;
+        inputArmed = true;
+        awaitingRoundAdvance = false;
+        waitingForInitialClear = false;
+        waitingForBoardClear = false;
+        clearBoardStreak = 0;
+        hasStartedGame = false;
+        gamePhase = "waiting";
+        hideResultBanner();
+        updateScoreboard();
+        // updateExpectedIndicator();
+        renderSequenceStrip();
+        // setPhaseUI("Pattern Challenge", "Ready");
+        updateStartButton();
+    }
+
+    function startGameIfReady() {
+        if (!boardRectified || hasStartedGame || gamePhase === "memorize" || gamePhase === "play") {
+        return;
+    }
+
+        setStatus("Board ready. Press Start Game.", "connected");
+        updateStartButton();
+    }
+
+    function handleStartGame() {
+        if (hasStartedGame) {
+            resetGameState();
+            setStatus("Game restarted. Loading empty mosaic...", "connected");
+            void loadEmptyMosaic();
+            return;
+        }
+
+        if (!boardRectified || hasStartedGame || (gamePhase !== "waiting" && gamePhase !== "loading")) {
+            return;
+        }
+
+        hasStartedGame = true;
+        hideResultBanner();
+        setStatus("Starting random coordinate sequence game.", "connected");
+        // setPhaseUI("Memorize the sequence", "Round 1");
+        updateStartButton();
+        startNextRound();
+    }
+
+    function startNextRound() {
+        if (gamePhase === "game-over") return;
+
+        awaitingRoundAdvance = false;
+        inputArmed = true;
+        waitingForBoardClear = false;
+        clearBoardStreak = 0;
+        sequence.push(chooseRandomCell());
+        round = sequence.length;
+        expectedIndex = 0;
+        updateScoreboard();
+        updateExpectedIndicator();
+        void runMemorizeSequence();
+    }
+
+    async function runMemorizeSequence() {
+        const runId = ++memorizeRunId;
+        gamePhase = "memorize";
+        // setPhaseUI("Memorize the sequence", `${sequence.length} step${sequence.length === 1 ? "" : "s"}`);
+        setStatus(`Round ${round}: watch the random cells.`, "connected");
+        updateStartButton();
+
+        for (let i = 0; i < sequence.length; i++) {
+            if (runId !== memorizeRunId) return;
+                renderSequenceStrip({ revealedCount: i + 1, activeIndex: i, hideFuture: false });
+            await delay(MEMORIZE_STEP_MS);
+            if (runId !== memorizeRunId) return;
+                renderSequenceStrip({ revealedCount: i + 1, activeIndex: -1, hideFuture: false });
+            await delay(MEMORIZE_GAP_MS);
+        }
+
+        if (runId !== memorizeRunId) return;
+        enterPlayMode();
+    }
+
+    function enterPlayMode() {
+        const requireInitialClear = round === 1;
+        gamePhase = "play";
+        expectedIndex = 0;
+        inputArmed = !requireInitialClear;
+        awaitingRoundAdvance = false;
+        waitingForInitialClear = requireInitialClear;
+        waitingForBoardClear = false;
+        clearBoardStreak = 0;
+        mismatchCell = null;
+        // setPhaseUI("Play mode", "Match x,y order");
+        setStatus(
+            requireInitialClear
+                ? "Clear all blocks first, then place one block on the expected coordinate."
+                : "Place one block on the expected coordinate. Lift between steps.",
+            "connected"
+        );
+        updateStartButton();
+        renderSequenceStrip({ revealedCount: 0, activeIndex: -1, hideFuture: true });
+        updateScoreboard();
+        updateExpectedIndicator();
+    }
+
+    function handleRoundSuccess() {
+        score += 1;
+        awaitingRoundAdvance = true;
+        updateScoreboard();
+        updateExpectedIndicator();
+        // setPhaseUI("Round complete", `Score ${score}`);
+        setStatus(`Round ${round} clear. Next round incoming...`, "connected");
+        roundAdvanceTimerId = setTimeout(() => {
+        roundAdvanceTimerId = null;
+        if (gamePhase !== "game-over") {
+            previousCell = sequence[sequence.length - 1];
+            startNextRound();
+        }
+        }, 950);
+    }
+
+    function handleGameOver(receivedCell, expectedCell) {
+        memorizeRunId += 1;
+        clearRoundAdvanceTimer();
+        gamePhase = "game-over";
+        awaitingRoundAdvance = false;
+        // setPhaseUI("Game over", `Final Round ${round}`);
+        setStatus(`Mismatch: expected ${prettyCell(expectedCell)}, got ${prettyCell(receivedCell)}.`, "error");
+        showResultBanner(`Game over. Final Round: ${round}`);
+        updateStartButton();
+        renderSequenceStrip({ revealedCount: sequence.length, activeIndex: -1, hideFuture: false });
+        mismatchCell = receivedCell;
+        markMismatchCell(mismatchCell);
+        markExpectedCell(expectedCell);
+        updateExpectedIndicator();
+    }
+
+    function parseDetectedCell(payload) {
+        const pos = payload.raw_position || payload.current_position;
+        if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number") {
+        return null;
+        }
+
+        const x = Math.trunc(pos.x);
+        const y = Math.trunc(pos.y);
+        if (x < 0 || y < 0 || x >= boardRows || y >= boardCols) {
+        return null;
+    }
+
+    return { x, y };
+    }
+
+    function getIncorrectCells(payload) {
+        const states = Array.isArray(payload.cell_state) ? payload.cell_state : [];
+        const out = [];
+        for (const entry of states) {
+            if (!entry || entry.state !== "incorrect") continue;
+            if (typeof entry.x !== "number" || typeof entry.y !== "number") continue;
+            out.push({ x: Math.trunc(entry.x), y: Math.trunc(entry.y) });
+        }
+        return out;
+    }
+    
+    function getCurrentCells(payload) {
+        const states = Array.isArray(payload.cell_state) ? payload.cell_state : [];
+        const out = [];
+        for (const entry of states) {
+            if (!entry || entry.state !== "current") continue;
+            if (!entry || typeof entry.x !== "number" || typeof entry.y !== "number") continue;
+            out.push({ x: Math.trunc(entry.x), y: Math.trunc(entry.y) });
+        }
+        return out;
+    }
+
+    function hasCell(cells, target) {
+        return cells.some((c) => c.x === target.x && c.y === target.y);
+    }
+
+    function processPlayInput(payload) {
+        if (gamePhase !== "play" || awaitingRoundAdvance || boardRectified !== true) {
+            return;
+        }
+
+        const incorrectCells = getIncorrectCells(payload);
+        const currentCells = getCurrentCells(payload);
+        const boardOccupied = currentCells.length > 0 || incorrectCells.length > 0;
+
+        if (waitingForInitialClear) {
+            if (!boardOccupied) {
+                clearBoardStreak += 1;
+                if (clearBoardStreak >= CLEAR_ARM_FRAMES) {
+                    waitingForInitialClear = false;
+                    inputArmed = true;
+                    clearBoardStreak = 0;
+                    setStatus(`Ready. Place block at ${describeCell(sequence[expectedIndex])}.`, "connected");
+                }
+            } else {
+                clearBoardStreak = 0;
+                setStatus("Waiting for all blocks to clear before starting this round.", "error");
+            }
+            return;
+        }
+
+        if (waitingForBoardClear) {
+            if (!boardOccupied) {
+                clearBoardStreak += 1;
+                if (clearBoardStreak >= CLEAR_ARM_FRAMES) {
+                    waitingForBoardClear = false;
+                    inputArmed = true;
+                    clearBoardStreak = 0;
+                    if (expectedIndex < sequence.length) {
+                        setStatus(`Ready for next step: ${describeCell(sequence[expectedIndex])}.`, "connected");
+                    }
+                }
+            } else {
+                clearBoardStreak = 0;
+            }
+            return;
+        }
+
+        if (!inputArmed) {
+            return;
+        }
+
+        if (!boardOccupied) {
+            return;
+        }
+
+        const expectedCell = sequence[expectedIndex];
+        const expectedFromCurrent = hasCell(currentCells, expectedCell);
+        const expectedFromIncorrect = hasCell(incorrectCells, expectedCell);
+        const expectedSeen = expectedFromCurrent || expectedFromIncorrect;
+
+        const wrongIncorrectCells = incorrectCells.filter((c) => {
+            const isExpected = c.x === expectedCell.x && c.y === expectedCell.y;
+            const isPrevious = previousCell !== null && c.x === previousCell.x && c.y === previousCell.y;
+            return !isExpected && !isPrevious;
+        });
+
+        if (wrongIncorrectCells.length > 0) {
+            handleGameOver(wrongIncorrectCells[0], expectedCell);
+            return;
+        }
+
+        if (!expectedSeen) {
+            return;
+        }
+
+        inputArmed = false;
+        waitingForBoardClear = true;
+        clearBoardStreak = 0;
+        previousCell = expectedCell;
+        playBell();
+        expectedIndex += 1;
+        renderSequenceStrip({ revealedCount: sequence.length, activeIndex: -1, hideFuture: false });
+        updateScoreboard();
+        updateExpectedIndicator();
+
+        if (expectedIndex >= sequence.length) {
+            
+            handleRoundSuccess();
+            return;
+        }
+
+        setStatus(`Correct. Lift block to arm next input (${expectedIndex + 1}/${sequence.length}).`, "connected");
+    }
+
+
+    function maybeUpdateBoardSizeFromPayload(payload) {
+        if (!Array.isArray(payload.grid) || payload.grid.length === 0 || !Array.isArray(payload.grid[0])) {
+        return;
+        }
+
+        const rows = payload.grid.length;
+        const cols = payload.grid[0].length;
+        if (rows > 0 && cols > 0 && (rows !== boardRows || cols !== boardCols)) {
+            buildCoordinateGrid(rows, cols);
+            renderSequenceStrip({
+            revealedCount: gamePhase === "play" ? sequence.length : 0,
+            activeIndex: -1,
+            hideFuture: gamePhase === "play"
+            });
+        }
+    }
+
+    function renderFromPayload(payload) {
+        boardRectified = payload.board_rectified === true;
+        updateStartButton();
+        maybeUpdateBoardSizeFromPayload(payload);
+
+        if (!boardRectified) {
+        setStatus("Waiting for board rectification (show all 4 corner tags).", "error");
+            return;
+        }
+
+        if (gamePhase === "waiting" || gamePhase === "loading") {
+            startGameIfReady();
+        }
+
+        processPlayInput(payload);
+    }
+
+    function connectWebSocket() {
+        const ws = new WebSocket("ws://localhost:8000/ws");
+        ws.onopen = () => setStatus("Connected. Waiting for board data...", "connected");
+        ws.onmessage = (event) => {
+        try {
+            const payload = JSON.parse(event.data);
+            renderFromPayload(payload);
+        } catch {
+            setStatus("Received invalid data.", "error");
+        }
+        };
+        ws.onerror = () => setStatus("WebSocket error.", "error");
+        ws.onclose = () => {
+        setStatus("Disconnected. Retrying...", "error");
+        setTimeout(connectWebSocket, 1000);
+        };
+        }
+
+    backButton.addEventListener("click", () => {
+    window.location.href = "../game_mode.html";
+    });
+
+    if (startGameButton) {
+        startGameButton.addEventListener("click", () => {
+            primeAudioOnce();
+            handleStartGame();
+        });
+    }
+
+    document.addEventListener("pointerdown", primeAudioOnce, { once: true });
+    document.addEventListener("keydown", primeAudioOnce, { once: true });
+
+    buildCoordinateGrid(DEFAULT_ROWS, DEFAULT_COLS);
+    resetGameState();
+    setStatus("Loading empty mosaic...", "connected");
+    void loadEmptyMosaic();
+    connectWebSocket();
+    </script>
+</body>
+</html>
